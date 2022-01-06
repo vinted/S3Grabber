@@ -1,0 +1,16 @@
+---
+buckets:
+  lithuania:
+    host: foo.bar
+    access_key: aabb
+    secret_key: bbaa
+    bucket: test
+grabbers:
+  alerting_rules:
+    buckets:
+      - lithuania
+    file: "alerting_rules.tar.gz"
+    paths:
+      - "/etc/prometheus/rules"
+    commands:
+      - "kill -HUP $(pidof prometheus)"

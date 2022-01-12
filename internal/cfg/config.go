@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func ReplaceWithEnvironmentVariables(input string) string {
+func replaceWithEnvironmentVariables(input string) string {
 	re := regexp.MustCompile(`\${(\w+)}`)
 	return re.ReplaceAllStringFunc(input, func(s string) string {
 		trimmedKey := strings.Trim(input, `${}`)
@@ -22,7 +22,7 @@ func (c *credentialString) UnmarshalYAML(unmarshal func(interface{}) error) erro
 	if err := unmarshal(&ret); err != nil {
 		return err
 	}
-	ret = ReplaceWithEnvironmentVariables(ret)
+	ret = replaceWithEnvironmentVariables(ret)
 	*c = credentialString(ret)
 	return nil
 }

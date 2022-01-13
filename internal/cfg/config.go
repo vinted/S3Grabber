@@ -1,9 +1,13 @@
 package cfg
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 func replaceWithEnvironmentVariables(input string) string {
@@ -44,4 +48,24 @@ type GrabberConfig struct {
 type GlobalConfig struct {
 	Buckets  map[string]BucketConfig
 	Grabbers map[string]GrabberConfig
+}
+
+func ReadConfig(path string) (GlobalConfig, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return GlobalConfig{}, fmt.Errorf("opening %s: %w", path, err)
+	}
+	defer f.Close()
+
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return GlobalConfig{}, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	ret := GlobalConfig{}
+	if err := yaml.Unmarshal(content, &ret); err != nil {
+		return GlobalConfig{}, fmt.Errorf("parsing YAML %s: %w", path, err)
+	}
+
+	return ret, nil
 }

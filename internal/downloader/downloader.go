@@ -12,7 +12,7 @@ import (
 )
 
 // BucketManager manages downloading files from multiple buckets.
-// The intention is to construct a BucketManager for each Grabber.
+// The intention is to construct a BucketManager for each Installer.
 type BucketManager struct {
 	bucketNames []string
 	clients     []*minio.Client

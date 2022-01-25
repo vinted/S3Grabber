@@ -38,7 +38,7 @@ func removeContents(dir string) error {
 // Adopted from
 // https://stackoverflow.com/questions/57639648/how-to-decompress-tar-gz-file-in-go.
 // Clears out dir before extracting.
-func extractTarGz(dir string, gzipStream io.Reader) error {
+func ExtractTarGz(dir string, gzipStream io.Reader) error {
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
 		return fmt.Errorf("creating gzip reader: %w", err)
@@ -119,7 +119,7 @@ func (i *Installer) Install(ctx context.Context) error {
 	defer rc.Close()
 
 	// Extract into given path.
-	if err := extractTarGz(i.installInto, rc); err != nil {
+	if err := ExtractTarGz(i.installInto, rc); err != nil {
 		return fmt.Errorf("extracting %s: %w", i.bucketPath, err)
 	}
 

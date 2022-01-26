@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -41,13 +42,15 @@ type BucketConfig struct {
 type GrabberConfig struct {
 	Buckets  []string
 	File     string
-	Paths    []string
+	Path     string
 	Commands []string
 }
 
 type GlobalConfig struct {
 	Buckets  map[string]BucketConfig
 	Grabbers map[string]GrabberConfig
+	Timeout  time.Duration
+	Shell    string
 }
 
 func ReadConfig(path string) (GlobalConfig, error) {
@@ -65,6 +68,14 @@ func ReadConfig(path string) (GlobalConfig, error) {
 	ret := GlobalConfig{}
 	if err := yaml.Unmarshal(content, &ret); err != nil {
 		return GlobalConfig{}, fmt.Errorf("parsing YAML %s: %w", path, err)
+	}
+
+	if ret.Shell == "" {
+		ret.Shell = "/bin/sh"
+	}
+
+	if ret.Timeout == 0 {
+		ret.Timeout = 5 * time.Second
 	}
 
 	return ret, nil

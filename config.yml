@@ -1,4 +1,6 @@
 ---
+shell: "/bin/sh"
+timeout: 5s # Max duration for all grabbers.
 buckets:
   lithuania:
     host: foo.bar
@@ -10,7 +12,6 @@ grabbers:
     buckets:
       - lithuania
     file: "alerting_rules.tar.gz"
-    paths:
-      - "/etc/prometheus/rules"
+    path: "/etc/prometheus/rules"
     commands:
       - "kill -HUP $(pidof prometheus)"

@@ -10,8 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/vinted/S3Grabber/internal/downloader"
 )
 
@@ -94,9 +97,10 @@ type Installer struct {
 
 	bm       *downloader.BucketManager
 	shellCmd string
+	logger   log.Logger
 }
 
-func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string) *Installer {
+func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, logger log.Logger) *Installer {
 	return &Installer{
 		bm:                      bm,
 		lastModTimeByObjectPath: make(map[string]time.Time),
@@ -104,11 +108,12 @@ func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, i
 		installInto:             installInto,
 		bucketPath:              bucketPath,
 		shellCmd:                shellCmd,
+		logger:                  logger,
 	}
 }
 
 func (i *Installer) Install(ctx context.Context) error {
-	rc, err := i.getReader(ctx, i.bucketPath)
+	rc, err := i.getReader(ctx, i.bucketPath, i.installInto)
 	if err != nil {
 		return err
 	}
@@ -140,15 +145,34 @@ func (i *Installer) Install(ctx context.Context) error {
 
 // getReader gets a reader for the specified path if it has been updated
 // since the last call.
-func (i *Installer) getReader(ctx context.Context, path string) (io.ReadCloser, error) {
-	mTm, bi, err := i.bm.FindNewestFile(ctx, path)
+func (i *Installer) getReader(ctx context.Context, bucketPath, installInto string) (io.ReadCloser, error) {
+	mTm, bi, err := i.bm.FindNewestFile(ctx, bucketPath)
 	if err != nil {
 		return nil, fmt.Errorf("finding newest file: %w", err)
 	}
-	if mTm.Before(i.lastModTimeByObjectPath[path]) || mTm.Equal(i.lastModTimeByObjectPath[path]) {
+	// Check that modify time is ahead of the captured last mod time.
+	// NOTE: this does not do anything useful in single-shot mode, just exists as a safe programming check.
+	if mTm.Before(i.lastModTimeByObjectPath[bucketPath]) || mTm.Equal(i.lastModTimeByObjectPath[bucketPath]) {
+		_ = level.Debug(i.logger).Log("msg", "last modified time is ahead of the modified time in remote object storage", "modifyTime", mTm, "lastLocalModifyTime", i.lastModTimeByObjectPath[bucketPath])
 		return nil, nil
 	}
-	i.lastModTimeByObjectPath[path] = mTm
 
-	return i.bm.GetFile(ctx, path, bi)
+	// Ensure ctime is after modify time.
+	fi, err := os.Stat(installInto)
+	if err != nil {
+		return nil, fmt.Errorf("calling stat %s: %w", installInto, err)
+	}
+	stat, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, fmt.Errorf("got wrong type (%T, expected syscall.Stat_t)", fi.Sys())
+	}
+	ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+	if mTm.Before(ctime) {
+		_ = level.Debug(i.logger).Log("msg", "object is older in remote object storage", "modifyTime", mTm, "ctime", ctime)
+		return nil, nil
+	}
+
+	i.lastModTimeByObjectPath[bucketPath] = mTm
+
+	return i.bm.GetFile(ctx, bucketPath, bi)
 }

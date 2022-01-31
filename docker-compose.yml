@@ -1,0 +1,23 @@
+version: '3'
+services:
+  minio2:
+    image: docker.io/bitnami/minio:2022
+    environment:
+      MINIO_ACCESS_KEY: foobar
+      MINIO_SECRET_KEY: foobardd
+    networks: ["test"]
+  minio1:
+    image: docker.io/bitnami/minio:2022
+    environment:
+      MINIO_ACCESS_KEY: foobar
+      MINIO_SECRET_KEY: foobardd
+    networks: ["test"]
+  tester:
+    networks: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.tester
+    command: ["true"] # do not start the container when `docker-compose up` is executed
+
+networks:
+  test:

@@ -1,0 +1,9 @@
+FROM golang:1.17
+
+WORKDIR /code
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . /code
+RUN go build -o s3grabber ./cmd/s3grabber

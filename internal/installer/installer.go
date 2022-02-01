@@ -166,7 +166,7 @@ func (i *Installer) getReader(ctx context.Context, bucketPath, installInto strin
 	if !ok {
 		return nil, fmt.Errorf("got wrong type (%T, expected syscall.Stat_t)", fi.Sys())
 	}
-	ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+	ctime := time.Unix(int64(StatCtime(stat).Sec), int64(StatCtime(stat).Nsec))
 	if mTm.Before(ctime) {
 		_ = level.Debug(i.logger).Log("msg", "object is older in remote object storage", "modifyTime", mTm, "ctime", ctime)
 		return nil, nil

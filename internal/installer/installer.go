@@ -98,9 +98,10 @@ type Installer struct {
 	bm       *downloader.BucketManager
 	shellCmd string
 	logger   log.Logger
+	timeout  time.Duration
 }
 
-func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, logger log.Logger) *Installer {
+func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
 	return &Installer{
 		bm:                      bm,
 		lastModTimeByObjectPath: make(map[string]time.Time),
@@ -109,7 +110,12 @@ func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, i
 		bucketPath:              bucketPath,
 		shellCmd:                shellCmd,
 		logger:                  logger,
+		timeout:                 timeout,
 	}
+}
+
+func (i *Installer) GetTimeout() time.Duration {
+	return i.timeout
 }
 
 func (i *Installer) Install(ctx context.Context) error {

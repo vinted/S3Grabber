@@ -36,7 +36,7 @@ func initializeLogger(logFormat string, logLevel string) log.Logger {
 }
 
 func main() {
-	configFile := kingpin.Flag("config-file", "Path to the configuration file").Required().String()
+	configFile := kingpin.Flag("config-path", "Path to the configuration file or directory").Required().String()
 	logFormat := kingpin.Flag("log-format", "Log format").Default("LOGFMT").Enum("JSON", "LOGFMT")
 	logLevel := kingpin.Flag("log-level", "Log level").Default("DEBUG").Enum("DEBUG", "INFO", "WARN", "ERROR")
 

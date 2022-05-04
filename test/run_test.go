@@ -48,8 +48,6 @@ func TestS3GrabberMain(t *testing.T) {
 				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDir, "somefile"))},
 			},
 		},
-		Timeout: 5 * time.Second,
-		Shell:   "/bin/sh",
 	}
 	err := s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
 	require.NotNil(t, err)

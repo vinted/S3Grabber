@@ -50,21 +50,21 @@ func TestS3GrabberMain(t *testing.T) {
 		},
 	}
 	err := s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
-	require.NotNil(t, err)
+	require.NoError(t, err)
 
 	// Upload the file to both buckets.
 	time.Sleep(1 * time.Second) // To ensure ctime < modify time.
 	bm, err := downloader.NewBucketManager([]cfg.BucketConfig{
 		grabberCfg.Buckets["test1"], grabberCfg.Buckets["test2"],
 	})
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Only upload to one bucket to check whether it works properly.
-	require.Nil(t, bm.CreateBucket(context.Background(), "test", 0))
-	require.Nil(t, bm.CreateBucket(context.Background(), "test", 1))
-	require.Nil(t, bm.PutFile(context.Background(), "../internal/downloader/example.tar.gz", "/example.tar.gz", 1))
+	require.NoError(t, bm.CreateBucket(context.Background(), "test", 0))
+	require.NoError(t, bm.CreateBucket(context.Background(), "test", 1))
+	require.NoError(t, bm.PutFile(context.Background(), "../internal/downloader/example.tar.gz", "/example.tar.gz", 1))
 
 	err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	checkFileContentEqual(t, filepath.Join(tmpDir, "test"), "Hello world!\n")
 	checkFileContentEqual(t, filepath.Join(tmpDir, "somefile"), "foobar\n")

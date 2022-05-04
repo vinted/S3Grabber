@@ -46,11 +46,14 @@ func TestS3GrabberMain(t *testing.T) {
 				File:     "example.tar.gz",
 				Path:     tmpDir,
 				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDir, "somefile"))},
+				Timeout:  5 * time.Second,
+				Shell:    "/bin/sh",
 			},
 		},
 	}
 	err := s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "The specified bucket does not exist")
 
 	// Upload the file to both buckets.
 	time.Sleep(1 * time.Second) // To ensure ctime < modify time.
@@ -58,6 +61,7 @@ func TestS3GrabberMain(t *testing.T) {
 		grabberCfg.Buckets["test1"], grabberCfg.Buckets["test2"],
 	})
 	require.NoError(t, err)
+
 	// Only upload to one bucket to check whether it works properly.
 	require.NoError(t, bm.CreateBucket(context.Background(), "test", 0))
 	require.NoError(t, bm.CreateBucket(context.Background(), "test", 1))

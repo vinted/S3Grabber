@@ -17,7 +17,7 @@ services:
     networks: ["test"]
     command: server /data
     volumes:
-      - data2:/data
+      - data:/data
   tester:
     networks: ["test"]
     build:

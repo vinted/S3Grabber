@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -30,7 +31,6 @@ buckets:
 grabbers:
   alerting_rules:
     shell: "/bin/sh"
-    timeout: 5s # Max duration for this grabber.
     buckets:
       - lithuania
     file: "alerting_rules.tar.gz"
@@ -47,7 +47,6 @@ buckets:
 grabbers:
   alerting_rules:
     shell: "/bin/sh"
-    timeout: 5s # Max duration for this grabber.
     buckets:
       - lithuania
     file: "alerting_rules.tar.gz"
@@ -71,7 +70,6 @@ buckets:
 grabbers:
   bbb:
     shell: "/bin/sh"
-    timeout: 5s # Max duration for this grabber.
     buckets:
       - aaa
     file: "alerting_rules.tar.gz"
@@ -88,7 +86,6 @@ buckets:
 grabbers:
   bbb:
     shell: "/bin/sh"
-    timeout: 5s # Max duration for this grabber.
     buckets:
       - fff
     file: "alerting_rules.tar.gz"
@@ -98,7 +95,7 @@ grabbers:
 			},
 			expectedCfg: GlobalConfig{
 				Buckets:  map[string]BucketConfig{"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"}},
-				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: "alerting_rules.tar.gz", Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5000000000, Shell: "/bin/sh"}},
+				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: "alerting_rules.tar.gz", Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
 			},
 		},
 	} {

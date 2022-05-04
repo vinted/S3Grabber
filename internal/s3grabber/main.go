@@ -28,15 +28,18 @@ func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) error {
 			return fmt.Errorf("constructing bucket manager for grabber %s: %w", grabberName, err)
 		}
 
-		installers = append(installers, installer.NewInstaller(bm, grabber.Commands, grabber.File, grabber.Path, config.Shell, logger))
+		installers = append(installers, installer.NewInstaller(bm, grabber.Commands, grabber.File, grabber.Path, grabber.Shell, grabber.Timeout, logger))
 	}
 
 	g := &run.Group{}
-	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+	gctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	for _, i := range installers {
 		g.Add(func() error {
+			ctx, cancel := context.WithTimeout(gctx, i.GetTimeout())
+			defer cancel()
+
 			return i.Install(ctx)
 		}, func(error) {
 			cancel()

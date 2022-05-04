@@ -1,6 +1,4 @@
 ---
-shell: "/bin/sh"
-timeout: 5s # Max duration for all grabbers.
 buckets:
   lithuania:
     host: foo.bar
@@ -9,6 +7,8 @@ buckets:
     bucket: test
 grabbers:
   alerting_rules:
+    shell: "/bin/sh"
+    timeout: 5s # Max duration for this grabber.
     buckets:
       - lithuania
     file: "alerting_rules.tar.gz"

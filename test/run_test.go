@@ -75,12 +75,13 @@ func TestS3GrabberMain(t *testing.T) {
 	checkFileContentEqual(t, filepath.Join(tmpDir, "somefile"), "foobar\n")
 
 	require.Nil(t, os.RemoveAll(tmpDir))
+	require.Nil(t, os.MkdirAll(tmpDir, os.ModePerm))
 	err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	isEmpty, err := installer.IsEmptyDir(tmpDir)
 	require.NoError(t, err)
-	require.NotEqual(t, true, isEmpty)
+	require.Equal(t, false, isEmpty)
 }
 
 func checkFileContentEqual(t *testing.T, path, content string) {

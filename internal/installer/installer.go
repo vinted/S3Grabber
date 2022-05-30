@@ -193,29 +193,29 @@ var ErrNoUpdate = errors.New("no update since the last check")
 func (i *Installer) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
 	mTm, bi, err := i.bm.FindNewestFile(ctx, bucketPath)
 	if err != nil {
-		return 0, fmt.Errorf("finding newest file: %w", err)
+		return bi, fmt.Errorf("finding newest file: %w", err)
 	}
 
 	// Check that modify time is ahead of the captured last mod time.
 	// NOTE: this does not do anything useful in single-shot mode, just exists as a safe programming check.
 	if mTm.Before(i.lastModTimeByObjectPath[bucketPath]) || mTm.Equal(i.lastModTimeByObjectPath[bucketPath]) {
 		_ = level.Debug(i.logger).Log("msg", "last modified time is ahead of the modified time in remote object storage", "modifyTime", mTm, "lastLocalModifyTime", i.lastModTimeByObjectPath[bucketPath])
-		return 0, ErrNoUpdate
+		return bi, ErrNoUpdate
 	}
 
 	// Ensure ctime is after modify time.
 	fi, err := os.Stat(installInto)
 	if err != nil {
-		return 0, fmt.Errorf("calling stat %s: %w", installInto, err)
+		return bi, fmt.Errorf("calling stat %s: %w", installInto, err)
 	}
 	stat, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {
-		return 0, fmt.Errorf("got wrong type (%T, expected syscall.Stat_t)", fi.Sys())
+		return bi, fmt.Errorf("got wrong type (%T, expected syscall.Stat_t)", fi.Sys())
 	}
 	ctime := time.Unix(int64(StatCtime(stat).Sec), int64(StatCtime(stat).Nsec))
 	if mTm.Before(ctime) {
 		_ = level.Debug(i.logger).Log("msg", "object is older in remote object storage", "modifyTime", mTm, "ctime", ctime)
-		return 0, ErrNoUpdate
+		return bi, ErrNoUpdate
 	}
 
 	i.lastModTimeByObjectPath[bucketPath] = mTm

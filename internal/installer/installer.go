@@ -119,7 +119,7 @@ func (i *Installer) GetTimeout() time.Duration {
 	return i.timeout
 }
 
-func isEmptyDir(dir string) (bool, error) {
+func IsEmptyDir(dir string) (bool, error) {
 	f, err := os.Open(dir)
 	if err != nil {
 		return false, err
@@ -134,7 +134,7 @@ func isEmptyDir(dir string) (bool, error) {
 }
 
 func (i *Installer) Install(ctx context.Context) error {
-	isEmpty, err := isEmptyDir(i.installInto)
+	isEmpty, err := IsEmptyDir(i.installInto)
 	if err != nil {
 		_ = level.Debug(i.logger).Log("msg", "failed to check if dir is empty", "err", err.Error(), "dir", i.installInto)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vinted/S3Grabber/internal/cfg"
 	"github.com/vinted/S3Grabber/internal/downloader"
+	"github.com/vinted/S3Grabber/internal/installer"
 	"github.com/vinted/S3Grabber/internal/s3grabber"
 )
 
@@ -72,6 +73,14 @@ func TestS3GrabberMain(t *testing.T) {
 
 	checkFileContentEqual(t, filepath.Join(tmpDir, "test"), "Hello world!\n")
 	checkFileContentEqual(t, filepath.Join(tmpDir, "somefile"), "foobar\n")
+
+	require.Nil(t, os.RemoveAll(tmpDir))
+	err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
+	require.Error(t, err)
+
+	isEmpty, err := installer.IsEmptyDir(tmpDir)
+	require.NoError(t, err)
+	require.NotEqual(t, true, isEmpty)
 }
 
 func checkFileContentEqual(t *testing.T, path, content string) {

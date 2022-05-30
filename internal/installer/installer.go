@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -118,14 +119,47 @@ func (i *Installer) GetTimeout() time.Duration {
 	return i.timeout
 }
 
+func IsEmptyDir(dir string) (bool, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	_, err = f.Readdir(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, err
+}
+
 func (i *Installer) Install(ctx context.Context) error {
-	rc, err := i.getReader(ctx, i.bucketPath, i.installInto)
+	isEmpty, err := IsEmptyDir(i.installInto)
+	if err != nil {
+		_ = level.Debug(i.logger).Log("msg", "failed to check if dir is empty", "err", err.Error(), "dir", i.installInto)
+	}
+
+	doInstall := false
+	if isEmpty {
+		_ = level.Debug(i.logger).Log("msg", "executing installation because the provided dir is empty", "dir", i.installInto)
+		doInstall = true
+	}
+
+	bucketIndex, err := i.checkLastModTime(ctx, i.bucketPath, i.installInto)
+	if err != nil && !errors.Is(err, ErrNoUpdate) {
+		return err
+	} else if err == nil {
+		_ = level.Debug(i.logger).Log("msg", "executing installation because we have found an update", "dir", i.installInto, "path", i.bucketPath)
+		doInstall = true
+	}
+
+	if !doInstall {
+		return nil
+	}
+
+	rc, err := i.bm.GetFile(ctx, i.bucketPath, bucketIndex)
 	if err != nil {
 		return err
-	}
-	// No update.
-	if rc == nil {
-		return nil
 	}
 	defer rc.Close()
 
@@ -149,36 +183,42 @@ func (i *Installer) Install(ctx context.Context) error {
 	return nil
 }
 
-// getReader gets a reader for the specified path if it has been updated
+// ErrNoUpdate is an error returned when there was no update in remote object storage
 // since the last call.
-func (i *Installer) getReader(ctx context.Context, bucketPath, installInto string) (io.ReadCloser, error) {
+var ErrNoUpdate = errors.New("no update since the last check")
+
+// checkLastModTime finds the newest updated object in all provided buckets.
+// If there was no update since the last check then it returns ErrNoUpdate.
+// If there was an update then it returns the bucket's index.
+func (i *Installer) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
 	mTm, bi, err := i.bm.FindNewestFile(ctx, bucketPath)
 	if err != nil {
-		return nil, fmt.Errorf("finding newest file: %w", err)
+		return bi, fmt.Errorf("finding newest file: %w", err)
 	}
+
 	// Check that modify time is ahead of the captured last mod time.
 	// NOTE: this does not do anything useful in single-shot mode, just exists as a safe programming check.
 	if mTm.Before(i.lastModTimeByObjectPath[bucketPath]) || mTm.Equal(i.lastModTimeByObjectPath[bucketPath]) {
 		_ = level.Debug(i.logger).Log("msg", "last modified time is ahead of the modified time in remote object storage", "modifyTime", mTm, "lastLocalModifyTime", i.lastModTimeByObjectPath[bucketPath])
-		return nil, nil
+		return bi, ErrNoUpdate
 	}
 
 	// Ensure ctime is after modify time.
 	fi, err := os.Stat(installInto)
 	if err != nil {
-		return nil, fmt.Errorf("calling stat %s: %w", installInto, err)
+		return bi, fmt.Errorf("calling stat %s: %w", installInto, err)
 	}
 	stat, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {
-		return nil, fmt.Errorf("got wrong type (%T, expected syscall.Stat_t)", fi.Sys())
+		return bi, fmt.Errorf("got wrong type (%T, expected syscall.Stat_t)", fi.Sys())
 	}
 	ctime := time.Unix(int64(StatCtime(stat).Sec), int64(StatCtime(stat).Nsec))
 	if mTm.Before(ctime) {
 		_ = level.Debug(i.logger).Log("msg", "object is older in remote object storage", "modifyTime", mTm, "ctime", ctime)
-		return nil, nil
+		return bi, ErrNoUpdate
 	}
 
 	i.lastModTimeByObjectPath[bucketPath] = mTm
 
-	return i.bm.GetFile(ctx, bucketPath, bi)
+	return bi, nil
 }

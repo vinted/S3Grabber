@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/vinted/S3Grabber/internal/cfg"
@@ -72,10 +73,16 @@ func (m *BucketManager) FindNewestFile(ctx context.Context, path string) (modTim
 
 	const notFoundCode = "NoSuchKey"
 
+	var (
+		errs       error
+		checkedOne bool
+	)
+
 	for i, cl := range m.clients {
 		objInfo, err := cl.StatObject(ctx, m.bucketNames[i], path, minio.StatObjectOptions{})
 		if err != nil && minio.ToErrorResponse(err).Code != notFoundCode {
-			return modTime, bucketIndex, fmt.Errorf("getting %s info in %s: %w", path, cl.EndpointURL(), err)
+			errs = multierror.Append(errs, err)
+			continue
 		}
 		if minio.ToErrorResponse(err).Code == notFoundCode {
 			continue
@@ -84,11 +91,14 @@ func (m *BucketManager) FindNewestFile(ctx context.Context, path string) (modTim
 		if objInfo.LastModified.After(modTime) {
 			modTime = objInfo.LastModified
 			bucketIndex = i
+			checkedOne = true
 		}
-
 	}
 
-	if modTime.Equal(time.Time{}) {
+	if !checkedOne {
+		if errs != nil {
+			return modTime, bucketIndex, errs
+		}
 		return modTime, bucketIndex, fmt.Errorf("no file has been modified so either they do not exist or there are time synchronization problems")
 	}
 	return

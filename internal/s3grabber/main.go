@@ -36,6 +36,7 @@ func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) error {
 	defer cancel()
 
 	for _, i := range installers {
+		i := *i
 		g.Add(func() error {
 			ctx, cancel := context.WithTimeout(gctx, i.GetTimeout())
 			defer cancel()

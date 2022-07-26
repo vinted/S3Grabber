@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	cp "github.com/otiai10/copy"
 	"github.com/vinted/S3Grabber/internal/downloader"
 )
 
@@ -42,14 +43,20 @@ func removeContents(dir string) error {
 // Adopted from
 // https://stackoverflow.com/questions/57639648/how-to-decompress-tar-gz-file-in-go.
 // Clears out dir before extracting.
-func ExtractTarGz(dir string, gzipStream io.Reader) error {
+func ExtractTarGz(l log.Logger, uniqueName string, dir string, gzipStream io.Reader) error {
+	tmpDir, err := os.MkdirTemp("", uniqueName)
+	if err != nil {
+		return fmt.Errorf("creating temp dir: %w", err)
+	}
+
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			_ = level.Debug(l).Log("msg", "failed best effort clean up", "dir", tmpDir, "err", err)
+		}
+	}()
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
 		return fmt.Errorf("creating gzip reader: %w", err)
-	}
-
-	if err := removeContents(dir); err != nil {
-		return fmt.Errorf("clearing %s: %w", dir, err)
 	}
 
 	tarReader := tar.NewReader(uncompressedStream)
@@ -67,12 +74,12 @@ func ExtractTarGz(dir string, gzipStream io.Reader) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			fPath := filepath.Join(dir, header.Name)
+			fPath := filepath.Join(tmpDir, header.Name)
 			if err := os.Mkdir(fPath, 0755); err != nil {
 				return fmt.Errorf("creating dir %s: %w", fPath, err)
 			}
 		case tar.TypeReg:
-			fPath := filepath.Join(dir, header.Name)
+			fPath := filepath.Join(tmpDir, header.Name)
 			outFile, err := os.Create(fPath)
 			if err != nil {
 				return fmt.Errorf("creating file %s: %w", fPath, err)
@@ -85,6 +92,18 @@ func ExtractTarGz(dir string, gzipStream io.Reader) error {
 		default:
 			return fmt.Errorf("unknown type %v in %s", header.Typeflag, header.Name)
 		}
+	}
+
+	// Copy over from tmpDir.
+	if err := removeContents(dir); err != nil {
+		return fmt.Errorf("clearing %s: %w", dir, err)
+	}
+
+	if err := cp.Copy(tmpDir, dir, cp.Options{
+		PreserveTimes: true,
+		Sync:          true,
+	}); err != nil {
+		return fmt.Errorf("copying %s to %s: %w", tmpDir, dir, err)
 	}
 	return nil
 }
@@ -100,11 +119,13 @@ type Installer struct {
 	shellCmd string
 	logger   log.Logger
 	timeout  time.Duration
+	name     string
 }
 
-func NewInstaller(bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
+func NewInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
 	return &Installer{
 		bm:                      bm,
+		name:                    name,
 		lastModTimeByObjectPath: make(map[string]time.Time),
 		commands:                commands,
 		installInto:             installInto,
@@ -164,7 +185,7 @@ func (i *Installer) Install(ctx context.Context) error {
 	defer rc.Close()
 
 	// Extract into given path.
-	if err := ExtractTarGz(i.installInto, rc); err != nil {
+	if err := ExtractTarGz(i.logger, i.name, i.installInto, rc); err != nil {
 		return fmt.Errorf("extracting %s: %w", i.bucketPath, err)
 	}
 

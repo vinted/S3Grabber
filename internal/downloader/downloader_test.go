@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/johannesboyne/gofakes3"
 	"github.com/johannesboyne/gofakes3/backend/s3mem"
 	"github.com/stretchr/testify/assert"
@@ -76,7 +77,7 @@ func TestDownloadFile(t *testing.T) {
 		})
 		assert.Nil(t, os.MkdirAll(tmpDir, os.ModePerm))
 
-		assert.Nil(t, installer.ExtractTarGz(tmpDir, rc))
+		assert.Nil(t, installer.ExtractTarGz(log.NewNopLogger(), "foo", tmpDir, rc))
 		f, err := os.Open(filepath.Join(tmpDir, "test"))
 		assert.Nil(t, err)
 		t.Cleanup(func() {

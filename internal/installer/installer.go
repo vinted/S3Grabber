@@ -153,7 +153,7 @@ func IsEmptyDir(dir string) (bool, error) {
 	return false, err
 }
 
-func (i *Installer) Install(ctx context.Context) error {
+func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr error) {
 	isEmpty, err := IsEmptyDir(i.installInto)
 	if err != nil {
 		_ = level.Debug(i.logger).Log("msg", "failed to check if dir is empty", "err", err.Error(), "dir", i.installInto)
@@ -167,25 +167,25 @@ func (i *Installer) Install(ctx context.Context) error {
 
 	bucketIndex, err := i.checkLastModTime(ctx, i.bucketPath, i.installInto)
 	if err != nil && !errors.Is(err, ErrNoUpdate) {
-		return err
+		return false, err
 	} else if err == nil {
 		_ = level.Debug(i.logger).Log("msg", "executing installation because we have found an update", "dir", i.installInto, "path", i.bucketPath)
 		doInstall = true
 	}
 
 	if !doInstall {
-		return nil
+		return false, nil
 	}
 
 	rc, err := i.bm.GetFile(ctx, i.bucketPath, bucketIndex)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer rc.Close()
 
 	// Extract into given path.
 	if err := ExtractTarGz(i.logger, i.name, i.installInto, rc); err != nil {
-		return fmt.Errorf("extracting %s: %w", i.bucketPath, err)
+		return true, fmt.Errorf("extracting %s: %w", i.bucketPath, err)
 	}
 
 	// Execute each command one by one.
@@ -197,10 +197,10 @@ func (i *Installer) Install(ctx context.Context) error {
 		cmd.Stderr = &stderr
 		err := cmd.Run()
 		if err != nil {
-			return fmt.Errorf("executing '%s': %w (stdout %s, stderr %s)", cmd, err, stdout.String(), stderr.String())
+			return true, fmt.Errorf("executing '%s': %w (stdout %s, stderr %s)", cmd, err, stdout.String(), stderr.String())
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // ErrNoUpdate is an error returned when there was no update in remote object storage

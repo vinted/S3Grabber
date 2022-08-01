@@ -52,8 +52,9 @@ func TestS3GrabberMain(t *testing.T) {
 			},
 		},
 	}
-	err := s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
+	attemptedInstall, err := s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
 	require.Error(t, err)
+	require.False(t, attemptedInstall)
 	require.Contains(t, err.Error(), "The specified bucket does not exist")
 
 	// Upload the file to both buckets.
@@ -68,16 +69,18 @@ func TestS3GrabberMain(t *testing.T) {
 	require.NoError(t, bm.CreateBucket(context.Background(), "test", 1))
 	require.NoError(t, bm.PutFile(context.Background(), "../internal/downloader/example.tar.gz", "/example.tar.gz", 1))
 
-	err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
+	attemptedInstall, err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
 	require.NoError(t, err)
+	require.True(t, attemptedInstall)
 
 	checkFileContentEqual(t, filepath.Join(tmpDir, "test"), "Hello world!\n")
 	checkFileContentEqual(t, filepath.Join(tmpDir, "somefile"), "foobar\n")
 
 	require.Nil(t, os.RemoveAll(tmpDir))
 	require.Nil(t, os.MkdirAll(tmpDir, os.ModePerm))
-	err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
+	attemptedInstall, err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
 	require.NoError(t, err)
+	require.True(t, attemptedInstall)
 
 	isEmpty, err := installer.IsEmptyDir(tmpDir)
 	require.NoError(t, err)

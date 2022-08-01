@@ -99,19 +99,36 @@ func main() {
 
 	g.Add(func() error {
 		if interval != nil && *interval != 0 {
+			// NOTE(GiedriusS): start with true to avoid an alert at boot.
+			var lastSyncSucceeded bool = true
+
 			t := time.NewTicker(*interval)
 			defer t.Stop()
+
 			for {
-				if err := s3grabber.RunS3Grabber(logger, cfg); err != nil {
+				// If attempted && err == nil -> lastSyncSucceeded = true
+				// If !attempted && err == nil -> nothing
+				// If attempted && err != nil -> lastSyncSucceeded = false
+				if attemptedInstall, err := s3grabber.RunS3Grabber(logger, cfg); err != nil {
+					if attemptedInstall {
+						lastSyncSucceeded = false
+					}
+
 					m.syncErrorsTotal.Inc()
 					_ = level.Error(logger).Log("msg", "failed to run S3Grabber iteration", "err", err.Error())
 				} else {
-					m.lastSuccessfulSyncTimestamp.SetToCurrentTime()
+					if attemptedInstall {
+						lastSyncSucceeded = true
+					}
+
+					if lastSyncSucceeded {
+						m.lastSuccessfulSyncTimestamp.SetToCurrentTime()
+					}
 				}
 				<-t.C
 			}
 		} else {
-			if err := s3grabber.RunS3Grabber(logger, cfg); err != nil {
+			if _, err := s3grabber.RunS3Grabber(logger, cfg); err != nil {
 				return err
 			} else {
 				m.lastSuccessfulSyncTimestamp.SetToCurrentTime()

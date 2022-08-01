@@ -100,7 +100,8 @@ func ExtractTarGz(l log.Logger, uniqueName string, dir string, gzipStream io.Rea
 	}
 
 	if err := cp.Copy(tmpDir, dir, cp.Options{
-		Sync: true,
+		PermissionControl: cp.DoNothing,
+		Sync:              true,
 	}); err != nil {
 		return fmt.Errorf("copying %s to %s: %w", tmpDir, dir, err)
 	}

@@ -36,6 +36,7 @@ func (c *credentialString) UnmarshalYAML(unmarshal func(interface{}) error) erro
 
 type BucketConfig struct {
 	Host      string
+	ResolveIP bool             `yaml:"resolve_ip"` // controls if given host should be resolved to IP for usage in client, first returned IP is used
 	AccessKey credentialString `yaml:"access_key"`
 	SecretKey credentialString `yaml:"secret_key"`
 	Bucket    string

@@ -98,6 +98,41 @@ grabbers:
 				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: "alerting_rules.tar.gz", Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
 			},
 		},
+		{
+			name: "config with ResolveIP",
+			fileContent: map[string]string{
+				"test3.yml": `---
+buckets:
+  aaa:
+    host: foo.bar
+    access_key: aabb
+    secret_key: bbaa
+    bucket: test
+  bbb:
+    host: foo.bar
+    resolve_ip: true
+    access_key: aabb
+    secret_key: bbaa
+    bucket: test
+grabbers:
+  fff:
+    shell: "/bin/sh"
+    buckets:
+      - aaa
+      - bbb
+    file: "alerting_rules.tar.gz"
+    path: "/etc/prometheus/rules"
+    commands:
+      - "kill -HUP $(pidof prometheus)"`,
+			},
+			expectedCfg: GlobalConfig{
+				Buckets: map[string]BucketConfig{
+					"aaa": {Host: "foo.bar", ResolveIP: false, AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
+					"bbb": {Host: "foo.bar", ResolveIP: true, AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
+				},
+				Grabbers: map[string]GrabberConfig{"fff": {Buckets: []string{"aaa", "bbb"}, File: "alerting_rules.tar.gz", Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
+			},
+		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
 			tmpDir := filepath.Join(os.TempDir(), "downloader-test")

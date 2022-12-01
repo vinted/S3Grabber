@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"time"
 
@@ -108,7 +109,19 @@ func NewBucketManager(buckets []cfg.BucketConfig) (*BucketManager, error) {
 	clients := make([]*minio.Client, 0, len(buckets))
 	bucketNames := make([]string, 0, len(buckets))
 	for _, bkt := range buckets {
-		client, err := minio.New(bkt.Host, &minio.Options{
+		host := bkt.Host
+		if bkt.ResolveIP {
+			hostname, port, err := net.SplitHostPort(bkt.Host)
+			if err != nil {
+				hostname = bkt.Host
+			}
+			addrs, err := net.LookupHost(hostname)
+			if err != nil {
+				return nil, fmt.Errorf("failing to lookup IP for %s: %w", bkt.Host, err)
+			}
+			host = net.JoinHostPort(addrs[0], port)
+		}
+		client, err := minio.New(host, &minio.Options{
 			Creds:        credentials.NewStaticV4(string(bkt.AccessKey), string(bkt.SecretKey), ""),
 			Secure:       false,
 			BucketLookup: minio.BucketLookupPath,

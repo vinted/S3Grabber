@@ -10,6 +10,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	filename = "alerting_rules.tar.gz"
+)
+
 func TestLoadFromPath(t *testing.T) {
 	t.Parallel()
 
@@ -95,7 +99,7 @@ grabbers:
 			},
 			expectedCfg: GlobalConfig{
 				Buckets:  map[string]BucketConfig{"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"}},
-				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: "alerting_rules.tar.gz", Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
+				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
 			},
 		},
 	} {

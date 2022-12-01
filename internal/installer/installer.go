@@ -108,8 +108,8 @@ func ExtractTarGz(l log.Logger, uniqueName string, dir string, gzipStream io.Rea
 	return nil
 }
 
-// Installer extracts files and runs commands if needed.
-type Installer struct {
+// ArchiveInstaller extracts files and runs commands if needed.
+type ArchiveInstaller struct {
 	commands                []string
 	installInto             string
 	bucketPath              string
@@ -122,8 +122,8 @@ type Installer struct {
 	name     string
 }
 
-func NewInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
-	return &Installer{
+func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *ArchiveInstaller {
+	return &ArchiveInstaller{
 		bm:                      bm,
 		name:                    name,
 		lastModTimeByObjectPath: make(map[string]time.Time),
@@ -136,7 +136,7 @@ func NewInstaller(name string, bm *downloader.BucketManager, commands []string, 
 	}
 }
 
-func (i *Installer) GetTimeout() time.Duration {
+func (i *ArchiveInstaller) GetTimeout() time.Duration {
 	return i.timeout
 }
 
@@ -154,7 +154,7 @@ func IsEmptyDir(dir string) (bool, error) {
 	return false, err
 }
 
-func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr error) {
+func (i *ArchiveInstaller) Install(ctx context.Context) (attemptedInstall bool, rerr error) {
 	isEmpty, err := IsEmptyDir(i.installInto)
 	if err != nil {
 		_ = level.Debug(i.logger).Log("msg", "failed to check if dir is empty", "err", err.Error(), "dir", i.installInto)
@@ -211,7 +211,7 @@ var ErrNoUpdate = errors.New("no update since the last check")
 // checkLastModTime finds the newest updated object in all provided buckets.
 // If there was no update since the last check then it returns ErrNoUpdate.
 // If there was an update then it returns the bucket's index.
-func (i *Installer) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
+func (i *ArchiveInstaller) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
 	mTm, bi, err := i.bm.FindNewestFile(ctx, bucketPath)
 	if err != nil {
 		return bi, fmt.Errorf("finding newest file: %w", err)

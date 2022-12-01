@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/oklog/run"
@@ -12,12 +13,17 @@ import (
 	"github.com/vinted/S3Grabber/internal/installer"
 )
 
+type Installer interface {
+	Install(ctx context.Context) (attemptedInstall bool, rerr error)
+	GetTimeout() time.Duration
+}
+
 func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) (bool, error) {
 	var (
 		globalAttemptedInstall bool
 		globalInstallMtx       sync.Mutex
 	)
-	installers := make([]*installer.Installer, 0, len(config.Grabbers))
+	installers := make([]Installer, 0, len(config.Grabbers))
 	for grabberName, grabber := range config.Grabbers {
 		bucketCfgs := []cfg.BucketConfig{}
 		for _, bktName := range grabber.Buckets {
@@ -33,7 +39,9 @@ func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) (bool, error) {
 			return globalAttemptedInstall, fmt.Errorf("constructing bucket manager for grabber %s: %w", grabberName, err)
 		}
 
-		installers = append(installers, installer.NewInstaller(grabberName, bm, grabber.Commands, grabber.File, grabber.Path, grabber.Shell, grabber.Timeout, logger))
+		if grabber.File != nil {
+			installers = append(installers, installer.NewArchiveInstaller(grabberName, bm, grabber.Commands, *grabber.File, grabber.Path, grabber.Shell, grabber.Timeout, logger))
+		}
 	}
 
 	g := &run.Group{}
@@ -41,7 +49,7 @@ func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) (bool, error) {
 	defer cancel()
 
 	for _, i := range installers {
-		i := *i
+		i := i
 		g.Add(func() error {
 			ctx, cancel := context.WithTimeout(gctx, i.GetTimeout())
 			defer cancel()

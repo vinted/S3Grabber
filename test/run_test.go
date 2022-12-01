@@ -17,6 +17,10 @@ import (
 	"github.com/vinted/S3Grabber/internal/s3grabber"
 )
 
+var (
+	archiveFilename = "example.tar.gz"
+)
+
 func TestS3GrabberMain(t *testing.T) {
 	t.Parallel()
 
@@ -44,7 +48,7 @@ func TestS3GrabberMain(t *testing.T) {
 		Grabbers: map[string]cfg.GrabberConfig{
 			"testing": {
 				Buckets:  []string{"test1", "test2"},
-				File:     "example.tar.gz",
+				File:     &archiveFilename,
 				Path:     tmpDir,
 				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDir, "somefile"))},
 				Timeout:  5 * time.Second,

@@ -43,7 +43,8 @@ type BucketConfig struct {
 
 type GrabberConfig struct {
 	Buckets  []string
-	File     string
+	File     *string
+	Dir      *string
 	Path     string
 	Commands []string
 	Timeout  time.Duration

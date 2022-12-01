@@ -62,6 +62,27 @@ grabbers:
 			name:        "duplicated names",
 		},
 		{
+			name: "neither file nor dir specified",
+			fileContent: map[string]string{
+				"test.yml": `---
+buckets:
+  lithuania:
+    host: foo.bar
+    access_key: aabb
+    secret_key: bbaa
+    bucket: test
+grabbers:
+  alerting_rules:
+    shell: "/bin/sh"
+    buckets:
+      - lithuania
+    path: "/etc/prometheus/rules"
+    commands:
+      - "kill -HUP $(pidof prometheus)"`,
+			},
+			expectedErr: true,
+		},
+		{
 			name: "proper load",
 			fileContent: map[string]string{
 				"test2.yml": `---
@@ -120,6 +141,7 @@ grabbers:
 				return
 			}
 
+			require.NoError(t, err)
 			require.Equal(t, tcase.expectedCfg, cfg)
 		})
 	}

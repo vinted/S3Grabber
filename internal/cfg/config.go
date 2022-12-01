@@ -86,6 +86,21 @@ func (gc *GlobalConfig) Merge(other *GlobalConfig) error {
 	return nil
 }
 
+func (gc *GlobalConfig) Validate() error {
+	errs := make([]string, 0)
+	for name, g := range gc.Grabbers {
+		if g.File == nil && g.Dir == nil {
+			errs = append(errs, fmt.Sprintf("grabber %s: either file or dir should be specified", name))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors: %s", strings.Join(errs, ","))
+	}
+
+	return nil
+}
+
 func readFromPath(originalPath string) (GlobalConfig, error) {
 	cfg := GlobalConfig{
 		Buckets:  map[string]BucketConfig{},
@@ -120,6 +135,12 @@ func readFromPath(originalPath string) (GlobalConfig, error) {
 	}); err != nil {
 		return cfg, fmt.Errorf("walking %s: %w", originalPath, err)
 	}
+
+	err := cfg.Validate()
+	if err != nil {
+		return cfg, fmt.Errorf("invalid config provided: %w", err)
+	}
+
 	return cfg, nil
 }
 

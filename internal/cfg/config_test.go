@@ -109,7 +109,7 @@ buckets:
     secret_key: bbaa
     bucket: test
 grabbers:
-  bbb:
+  ccc:
     shell: "/bin/sh"
     buckets:
       - fff
@@ -119,8 +119,14 @@ grabbers:
       - "kill -HUP $(pidof prometheus)"`,
 			},
 			expectedCfg: GlobalConfig{
-				Buckets:  map[string]BucketConfig{"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"}},
-				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
+				Buckets: map[string]BucketConfig{
+					"aaa": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
+					"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
+				},
+				Grabbers: map[string]GrabberConfig{
+					"bbb": {Buckets: []string{"aaa"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+					"ccc": {Buckets: []string{"fff"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+				},
 			},
 		},
 	} {

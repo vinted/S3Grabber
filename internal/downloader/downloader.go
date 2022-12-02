@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -30,6 +31,76 @@ func (m *BucketManager) GetFile(ctx context.Context, path string, bucketIndex in
 		return nil, fmt.Errorf("getting %s in %s: %w", path, m.clients[bucketIndex].EndpointURL(), err)
 	}
 	return obj, nil
+}
+
+type BucketFile struct {
+	Key     string
+	Content io.ReadCloser
+	Err     error
+}
+
+// GetFiles gets all the files in provided path from the specified bucket index that was retrieved from FindNewestFile.
+func (m *BucketManager) GetFiles(ctx context.Context, prefix string, bucketIndex int) (<-chan BucketFile, error) {
+	if err := m.indexInBounds(bucketIndex); err != nil {
+		return nil, err
+	}
+	bucketClient := m.clients[bucketIndex]
+	bucketName := m.bucketNames[bucketIndex]
+
+	bucketObjects := make(chan BucketFile, 1)
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix = prefix + "/"
+	}
+
+	go func() {
+		defer close(bucketObjects)
+		var err error
+		objInfoCh := bucketClient.ListObjects(ctx, bucketName, minio.ListObjectsOptions{Prefix: prefix})
+		for objInfo := range objInfoCh {
+			// stop fetching files as soon as first error is encountered
+			if err != nil {
+				continue
+			}
+			if objInfo.Err != nil {
+				err = fmt.Errorf("listing objects: %w", err)
+				bucketObjects <- BucketFile{
+					Err: err,
+				}
+				continue
+			}
+
+			if objInfo.Key == prefix {
+				continue // not a file: prefix (directory)
+			}
+
+			obj, err := bucketClient.GetObject(ctx, bucketName, objInfo.Key, minio.GetObjectOptions{})
+			if err != nil {
+				err = fmt.Errorf("getting object %s: %w", objInfo.Key, err)
+				bucketObjects <- BucketFile{
+					Err: err,
+				}
+				continue
+			}
+			if !strings.HasPrefix(objInfo.Key, prefix) {
+				// should not happen, but just to ensure safe prefix removal
+				err = fmt.Errorf("key does not have expected prefix %s: %s", prefix, objInfo.Key)
+				bucketObjects <- BucketFile{
+					Err: err,
+				}
+				continue
+			}
+			key := objInfo.Key[len(prefix):]
+
+			bucketObjects <- BucketFile{
+				Key:     key,
+				Content: obj,
+				Err:     nil,
+			}
+		}
+	}()
+
+	return bucketObjects, nil
 }
 
 func (m *BucketManager) indexInBounds(bucketIndex int) error {
@@ -92,6 +163,53 @@ func (m *BucketManager) FindNewestFile(ctx context.Context, path string) (modTim
 			modTime = objInfo.LastModified
 			bucketIndex = i
 			checkedOne = true
+		}
+	}
+
+	if !checkedOne {
+		if errs != nil {
+			return modTime, bucketIndex, errs
+		}
+		return modTime, bucketIndex, fmt.Errorf("no file has been modified so either they do not exist or there are time synchronization problems")
+	}
+	return
+}
+
+// FindNewestInPrefix finds the newest file in all of the buckets for the provided prefix.
+// Returns the modification time and bucket index that later on needs to be passed to GetFiles.
+func (m *BucketManager) FindNewestInPrefix(ctx context.Context, prefix string) (modTime time.Time, bucketIndex int, err error) {
+	if len(m.clients) == 0 {
+		return modTime, bucketIndex, fmt.Errorf("no clients configured")
+	}
+
+	const notFoundCode = "NoSuchKey"
+
+	var (
+		errs       error
+		checkedOne bool
+	)
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix = prefix + "/"
+	}
+
+	for i, cl := range m.clients {
+		objCh := cl.ListObjects(ctx, m.bucketNames[i], minio.ListObjectsOptions{Prefix: prefix})
+		for objInfo := range objCh {
+			err := objInfo.Err
+			if err != nil && minio.ToErrorResponse(err).Code != notFoundCode {
+				errs = multierror.Append(errs, err)
+				continue
+			}
+			if minio.ToErrorResponse(err).Code == notFoundCode {
+				continue
+			}
+
+			if objInfo.LastModified.After(modTime) {
+				modTime = objInfo.LastModified
+				bucketIndex = i
+				checkedOne = true
+			}
 		}
 	}
 

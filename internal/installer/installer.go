@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -124,10 +125,33 @@ type Installer struct {
 }
 
 type extracter interface {
+	findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error)
 	extractFiles(ctx context.Context, bucketIndex int) (bool, error)
 }
 
 func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
+	extracter := &archiveExtracter{
+		bucketPath:  bucketPath,
+		bm:          bm,
+		logger:      logger,
+		name:        name,
+		installInto: installInto,
+	}
+	return newInstaller(name, bm, commands, bucketPath, installInto, shellCmd, timeout, logger, extracter)
+}
+
+func NewDirectoryInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
+	extracter := &directoryExtracter{
+		bucketPrefix: bucketPath,
+		bm:           bm,
+		logger:       logger,
+		name:         name,
+		installInto:  installInto,
+	}
+	return newInstaller(name, bm, commands, bucketPath, installInto, shellCmd, timeout, logger, extracter)
+}
+
+func newInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger, extracter extracter) *Installer {
 	return &Installer{
 		bm:                      bm,
 		lastModTimeByObjectPath: make(map[string]time.Time),
@@ -137,13 +161,7 @@ func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []s
 		shellCmd:                shellCmd,
 		logger:                  logger,
 		timeout:                 timeout,
-		extracter: &archiveExtracter{
-			bucketPath:  bucketPath,
-			bm:          bm,
-			logger:      logger,
-			name:        name,
-			installInto: installInto,
-		},
+		extracter:               extracter,
 	}
 }
 
@@ -177,7 +195,7 @@ func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr er
 		doInstall = true
 	}
 
-	bucketIndex, err := i.checkLastModTime(ctx, i.bucketPath, i.installInto)
+	bucketIndex, err := i.checkLastModTime(ctx, i.installInto)
 	if err != nil && !errors.Is(err, ErrNoUpdate) {
 		return false, err
 	} else if err == nil {
@@ -216,16 +234,16 @@ var ErrNoUpdate = errors.New("no update since the last check")
 // checkLastModTime finds the newest updated object in all provided buckets.
 // If there was no update since the last check then it returns ErrNoUpdate.
 // If there was an update then it returns the bucket's index.
-func (i *Installer) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
-	mTm, bi, err := i.bm.FindNewestFile(ctx, bucketPath)
+func (i *Installer) checkLastModTime(ctx context.Context, installInto string) (int, error) {
+	mTm, bi, err := i.extracter.findNewestFile(ctx)
 	if err != nil {
 		return bi, fmt.Errorf("finding newest file: %w", err)
 	}
 
 	// Check that modify time is ahead of the captured last mod time.
 	// NOTE: this does not do anything useful in single-shot mode, just exists as a safe programming check.
-	if mTm.Before(i.lastModTimeByObjectPath[bucketPath]) || mTm.Equal(i.lastModTimeByObjectPath[bucketPath]) {
-		_ = level.Debug(i.logger).Log("msg", "last modified time is ahead of the modified time in remote object storage", "modifyTime", mTm, "lastLocalModifyTime", i.lastModTimeByObjectPath[bucketPath])
+	if mTm.Before(i.lastModTimeByObjectPath[i.bucketPath]) || mTm.Equal(i.lastModTimeByObjectPath[i.bucketPath]) {
+		_ = level.Debug(i.logger).Log("msg", "last modified time is ahead of the modified time in remote object storage", "modifyTime", mTm, "lastLocalModifyTime", i.lastModTimeByObjectPath[i.bucketPath])
 		return bi, ErrNoUpdate
 	}
 
@@ -244,7 +262,7 @@ func (i *Installer) checkLastModTime(ctx context.Context, bucketPath, installInt
 		return bi, ErrNoUpdate
 	}
 
-	i.lastModTimeByObjectPath[bucketPath] = mTm
+	i.lastModTimeByObjectPath[i.bucketPath] = mTm
 
 	return bi, nil
 }
@@ -257,6 +275,10 @@ type archiveExtracter struct {
 	installInto string
 }
 
+func (e *archiveExtracter) findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error) {
+	return e.bm.FindNewestFile(ctx, e.bucketPath)
+}
+
 func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {
 	rc, err := e.bm.GetFile(ctx, e.bucketPath, bucketIndex)
 	if err != nil {
@@ -267,6 +289,78 @@ func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (b
 	// Extract into given path.
 	if err := ExtractTarGz(e.logger, e.name, e.installInto, rc); err != nil {
 		return true, fmt.Errorf("extracting %s: %w", e.bucketPath, err)
+	}
+
+	return true, nil
+}
+
+type directoryExtracter struct {
+	bucketPrefix string
+	bm           *downloader.BucketManager
+	logger       log.Logger
+	name         string
+	installInto  string
+}
+
+func (e *directoryExtracter) findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error) {
+	return e.bm.FindNewestInPrefix(ctx, e.bucketPrefix)
+}
+
+func (e *directoryExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {
+	filesCh, err := e.bm.GetFiles(ctx, e.bucketPrefix, bucketIndex)
+	if err != nil {
+		return false, fmt.Errorf("starting to download files from the bucket: %w", err)
+	}
+
+	tmpDir, err := os.MkdirTemp("", e.name)
+	if err != nil {
+		return false, fmt.Errorf("creating temp dir: %w", err)
+	}
+
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			_ = level.Debug(e.logger).Log("msg", "failed best effort clean up", "dir", tmpDir, "err", err)
+		}
+	}()
+
+	for f := range filesCh {
+		err = func() error {
+			if f.Content != nil {
+				defer f.Content.Close()
+			}
+			if err != nil || f.Err != nil {
+				return err
+			}
+
+			tmpFilePath := path.Join(tmpDir, f.Key)
+			tmpFile, err := os.Create(tmpFilePath)
+			if err != nil {
+				return fmt.Errorf("creating temp file %s: %w", tmpFilePath, err)
+			}
+			defer tmpFile.Close()
+
+			_, err = io.Copy(tmpFile, f.Content)
+			if err != nil {
+				return fmt.Errorf("copying object content to temp file %s: %w", tmpFilePath, err)
+			}
+
+			return nil
+		}()
+	}
+	if err != nil {
+		return false, fmt.Errorf("saving remote objects: %w", err)
+	}
+
+	// Copy over from tmpDir.
+	if err := removeContents(e.installInto); err != nil {
+		return true, fmt.Errorf("clearing %s: %w", e.installInto, err)
+	}
+
+	if err := cp.Copy(tmpDir, e.installInto, cp.Options{
+		PermissionControl: cp.DoNothing,
+		Sync:              true,
+	}); err != nil {
+		return true, fmt.Errorf("copying %s to %s: %w", tmpDir, e.installInto, err)
 	}
 
 	return true, nil

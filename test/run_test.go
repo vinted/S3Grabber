@@ -19,15 +19,19 @@ import (
 
 var (
 	archiveFilename = "example.tar.gz"
+	dirName         = "exampledir"
 )
 
 func TestS3GrabberMain(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := filepath.Join(os.TempDir(), "s3grabber")
-	require.Nil(t, os.MkdirAll(tmpDir, os.ModePerm))
+	tmpDirArchive := filepath.Join(os.TempDir(), "s3grabber_archive")
+	tmpDirDir := filepath.Join(os.TempDir(), "s3grabber_dir")
+	require.Nil(t, os.MkdirAll(tmpDirArchive, os.ModePerm))
+	require.Nil(t, os.MkdirAll(tmpDirDir, os.ModePerm))
 	t.Cleanup(func() {
-		require.Nil(t, os.RemoveAll(tmpDir))
+		require.Nil(t, os.RemoveAll(tmpDirArchive))
+		require.Nil(t, os.RemoveAll(tmpDirDir))
 	})
 
 	grabberCfg := cfg.GlobalConfig{
@@ -46,11 +50,19 @@ func TestS3GrabberMain(t *testing.T) {
 			},
 		},
 		Grabbers: map[string]cfg.GrabberConfig{
-			"testing": {
+			"testing_archive": {
 				Buckets:  []string{"test1", "test2"},
 				File:     &archiveFilename,
-				Path:     tmpDir,
-				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDir, "somefile"))},
+				Path:     tmpDirArchive,
+				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDirArchive, "somefile"))},
+				Timeout:  5 * time.Second,
+				Shell:    "/bin/sh",
+			},
+			"testing_dir": {
+				Buckets:  []string{"test2"},
+				Dir:      &dirName,
+				Path:     tmpDirDir,
+				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDirDir, "some_dir_file"))},
 				Timeout:  5 * time.Second,
 				Shell:    "/bin/sh",
 			},
@@ -72,21 +84,26 @@ func TestS3GrabberMain(t *testing.T) {
 	require.NoError(t, bm.CreateBucket(context.Background(), "test", 0))
 	require.NoError(t, bm.CreateBucket(context.Background(), "test", 1))
 	require.NoError(t, bm.PutFile(context.Background(), "../internal/downloader/example.tar.gz", "/example.tar.gz", 1))
+	require.NoError(t, bm.PutFile(context.Background(), "dir_file1.txt", "exampledir/dir_file1.txt", 1))
+	require.NoError(t, bm.PutFile(context.Background(), "dir_file2.txt", "exampledir/dir_file2.txt", 1))
 
 	attemptedInstall, err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
 	require.NoError(t, err)
 	require.True(t, attemptedInstall)
 
-	checkFileContentEqual(t, filepath.Join(tmpDir, "test"), "Hello world!\n")
-	checkFileContentEqual(t, filepath.Join(tmpDir, "somefile"), "foobar\n")
+	checkFileContentEqual(t, filepath.Join(tmpDirArchive, "test"), "Hello world!\n")
+	checkFileContentEqual(t, filepath.Join(tmpDirDir, "dir_file1.txt"), "test1\n")
+	checkFileContentEqual(t, filepath.Join(tmpDirDir, "dir_file2.txt"), "test2\n")
+	checkFileContentEqual(t, filepath.Join(tmpDirArchive, "somefile"), "foobar\n")
+	checkFileContentEqual(t, filepath.Join(tmpDirDir, "some_dir_file"), "foobar\n")
 
-	require.Nil(t, os.RemoveAll(tmpDir))
-	require.Nil(t, os.MkdirAll(tmpDir, os.ModePerm))
+	require.Nil(t, os.RemoveAll(tmpDirArchive))
+	require.Nil(t, os.MkdirAll(tmpDirArchive, os.ModePerm))
 	attemptedInstall, err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
 	require.NoError(t, err)
 	require.True(t, attemptedInstall)
 
-	isEmpty, err := installer.IsEmptyDir(tmpDir)
+	isEmpty, err := installer.IsEmptyDir(tmpDirArchive)
 	require.NoError(t, err)
 	require.Equal(t, false, isEmpty)
 }

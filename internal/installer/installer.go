@@ -108,8 +108,8 @@ func ExtractTarGz(l log.Logger, uniqueName string, dir string, gzipStream io.Rea
 	return nil
 }
 
-// ArchiveInstaller extracts files and runs commands if needed.
-type ArchiveInstaller struct {
+// Installer extracts files and runs commands if needed.
+type Installer struct {
 	commands                []string
 	installInto             string
 	bucketPath              string
@@ -119,13 +119,17 @@ type ArchiveInstaller struct {
 	shellCmd string
 	logger   log.Logger
 	timeout  time.Duration
-	name     string
+
+	extracter extracter
 }
 
-func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *ArchiveInstaller {
-	return &ArchiveInstaller{
+type extracter interface {
+	extractFiles(ctx context.Context, bucketIndex int) (bool, error)
+}
+
+func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
+	return &Installer{
 		bm:                      bm,
-		name:                    name,
 		lastModTimeByObjectPath: make(map[string]time.Time),
 		commands:                commands,
 		installInto:             installInto,
@@ -133,10 +137,17 @@ func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []s
 		shellCmd:                shellCmd,
 		logger:                  logger,
 		timeout:                 timeout,
+		extracter: &archiveExtracter{
+			bucketPath:  bucketPath,
+			bm:          bm,
+			logger:      logger,
+			name:        name,
+			installInto: installInto,
+		},
 	}
 }
 
-func (i *ArchiveInstaller) GetTimeout() time.Duration {
+func (i *Installer) GetTimeout() time.Duration {
 	return i.timeout
 }
 
@@ -154,7 +165,7 @@ func IsEmptyDir(dir string) (bool, error) {
 	return false, err
 }
 
-func (i *ArchiveInstaller) Install(ctx context.Context) (attemptedInstall bool, rerr error) {
+func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr error) {
 	isEmpty, err := IsEmptyDir(i.installInto)
 	if err != nil {
 		_ = level.Debug(i.logger).Log("msg", "failed to check if dir is empty", "err", err.Error(), "dir", i.installInto)
@@ -178,15 +189,9 @@ func (i *ArchiveInstaller) Install(ctx context.Context) (attemptedInstall bool, 
 		return false, nil
 	}
 
-	rc, err := i.bm.GetFile(ctx, i.bucketPath, bucketIndex)
+	attempted, err := i.extracter.extractFiles(ctx, bucketIndex)
 	if err != nil {
-		return false, err
-	}
-	defer rc.Close()
-
-	// Extract into given path.
-	if err := ExtractTarGz(i.logger, i.name, i.installInto, rc); err != nil {
-		return true, fmt.Errorf("extracting %s: %w", i.bucketPath, err)
+		return attempted, fmt.Errorf("extracting files: %w", err)
 	}
 
 	// Execute each command one by one.
@@ -211,7 +216,7 @@ var ErrNoUpdate = errors.New("no update since the last check")
 // checkLastModTime finds the newest updated object in all provided buckets.
 // If there was no update since the last check then it returns ErrNoUpdate.
 // If there was an update then it returns the bucket's index.
-func (i *ArchiveInstaller) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
+func (i *Installer) checkLastModTime(ctx context.Context, bucketPath, installInto string) (int, error) {
 	mTm, bi, err := i.bm.FindNewestFile(ctx, bucketPath)
 	if err != nil {
 		return bi, fmt.Errorf("finding newest file: %w", err)
@@ -242,4 +247,27 @@ func (i *ArchiveInstaller) checkLastModTime(ctx context.Context, bucketPath, ins
 	i.lastModTimeByObjectPath[bucketPath] = mTm
 
 	return bi, nil
+}
+
+type archiveExtracter struct {
+	bucketPath  string
+	bm          *downloader.BucketManager
+	logger      log.Logger
+	name        string
+	installInto string
+}
+
+func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {
+	rc, err := e.bm.GetFile(ctx, e.bucketPath, bucketIndex)
+	if err != nil {
+		return false, err
+	}
+	defer rc.Close()
+
+	// Extract into given path.
+	if err := ExtractTarGz(e.logger, e.name, e.installInto, rc); err != nil {
+		return true, fmt.Errorf("extracting %s: %w", e.bucketPath, err)
+	}
+
+	return true, nil
 }

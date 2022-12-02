@@ -12,6 +12,7 @@ import (
 
 var (
 	filename = "alerting_rules.tar.gz"
+	dirname  = "slos"
 )
 
 func TestLoadFromPath(t *testing.T) {
@@ -109,11 +110,19 @@ buckets:
     secret_key: bbaa
     bucket: test
 grabbers:
-  ccc:
+  file_grabber:
     shell: "/bin/sh"
     buckets:
       - fff
     file: "alerting_rules.tar.gz"
+    path: "/etc/prometheus/rules"
+    commands:
+      - "kill -HUP $(pidof prometheus)"
+  dir_grabber:
+    shell: "/bin/sh"
+    buckets:
+      - fff
+    dir: "slos"
     path: "/etc/prometheus/rules"
     commands:
       - "kill -HUP $(pidof prometheus)"`,
@@ -124,8 +133,9 @@ grabbers:
 					"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
 				},
 				Grabbers: map[string]GrabberConfig{
-					"bbb": {Buckets: []string{"aaa"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
-					"ccc": {Buckets: []string{"fff"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+					"bbb":          {Buckets: []string{"aaa"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+					"file_grabber": {Buckets: []string{"fff"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+					"dir_grabber":  {Buckets: []string{"fff"}, Dir: &dirname, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
 				},
 			},
 		},

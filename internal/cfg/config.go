@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
 )
 
@@ -87,18 +88,14 @@ func (gc *GlobalConfig) Merge(other *GlobalConfig) error {
 }
 
 func (gc *GlobalConfig) Validate() error {
-	errs := make([]string, 0)
+	var errs error
 	for name, g := range gc.Grabbers {
 		if g.File == nil && g.Dir == nil {
-			errs = append(errs, fmt.Sprintf("grabber %s: either file or dir should be specified", name))
+			errs = multierror.Append(errs, fmt.Errorf("grabber %s: either file or dir should be specified", name))
 		}
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("errors: %s", strings.Join(errs, ","))
-	}
-
-	return nil
+	return errs
 }
 
 func readFromPath(originalPath string) (GlobalConfig, error) {

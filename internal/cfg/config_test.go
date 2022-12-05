@@ -10,6 +10,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	filename = "alerting_rules.tar.gz"
+	dirname  = "slos"
+)
+
 func TestLoadFromPath(t *testing.T) {
 	t.Parallel()
 
@@ -58,6 +63,27 @@ grabbers:
 			name:        "duplicated names",
 		},
 		{
+			name: "neither file nor dir specified",
+			fileContent: map[string]string{
+				"test.yml": `---
+buckets:
+  lithuania:
+    host: foo.bar
+    access_key: aabb
+    secret_key: bbaa
+    bucket: test
+grabbers:
+  alerting_rules:
+    shell: "/bin/sh"
+    buckets:
+      - lithuania
+    path: "/etc/prometheus/rules"
+    commands:
+      - "kill -HUP $(pidof prometheus)"`,
+			},
+			expectedErr: true,
+		},
+		{
 			name: "proper load",
 			fileContent: map[string]string{
 				"test2.yml": `---
@@ -84,18 +110,33 @@ buckets:
     secret_key: bbaa
     bucket: test
 grabbers:
-  bbb:
+  file_grabber:
     shell: "/bin/sh"
     buckets:
       - fff
     file: "alerting_rules.tar.gz"
     path: "/etc/prometheus/rules"
     commands:
+      - "kill -HUP $(pidof prometheus)"
+  dir_grabber:
+    shell: "/bin/sh"
+    buckets:
+      - fff
+    dir: "slos"
+    path: "/etc/prometheus/rules"
+    commands:
       - "kill -HUP $(pidof prometheus)"`,
 			},
 			expectedCfg: GlobalConfig{
-				Buckets:  map[string]BucketConfig{"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"}},
-				Grabbers: map[string]GrabberConfig{"bbb": {Buckets: []string{"fff"}, File: "alerting_rules.tar.gz", Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"}},
+				Buckets: map[string]BucketConfig{
+					"aaa": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
+					"fff": {Host: "foo.bar", AccessKey: "aabb", SecretKey: "bbaa", Bucket: "test"},
+				},
+				Grabbers: map[string]GrabberConfig{
+					"bbb":          {Buckets: []string{"aaa"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+					"file_grabber": {Buckets: []string{"fff"}, File: &filename, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+					"dir_grabber":  {Buckets: []string{"fff"}, Dir: &dirname, Path: "/etc/prometheus/rules", Commands: []string{"kill -HUP $(pidof prometheus)"}, Timeout: 5 * time.Second, Shell: "/bin/sh"},
+				},
 			},
 		},
 	} {
@@ -116,6 +157,7 @@ grabbers:
 				return
 			}
 
+			require.NoError(t, err)
 			require.Equal(t, tcase.expectedCfg, cfg)
 		})
 	}

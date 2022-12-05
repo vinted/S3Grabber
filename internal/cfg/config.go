@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,7 +44,8 @@ type BucketConfig struct {
 
 type GrabberConfig struct {
 	Buckets  []string
-	File     string
+	File     *string
+	Dir      *string
 	Path     string
 	Commands []string
 	Timeout  time.Duration
@@ -85,6 +87,17 @@ func (gc *GlobalConfig) Merge(other *GlobalConfig) error {
 	return nil
 }
 
+func (gc *GlobalConfig) Validate() error {
+	var errs error
+	for name, g := range gc.Grabbers {
+		if g.File == nil && g.Dir == nil {
+			errs = multierror.Append(errs, fmt.Errorf("grabber %s: either file or dir should be specified", name))
+		}
+	}
+
+	return errs
+}
+
 func readFromPath(originalPath string) (GlobalConfig, error) {
 	cfg := GlobalConfig{
 		Buckets:  map[string]BucketConfig{},
@@ -119,6 +132,12 @@ func readFromPath(originalPath string) (GlobalConfig, error) {
 	}); err != nil {
 		return cfg, fmt.Errorf("walking %s: %w", originalPath, err)
 	}
+
+	err := cfg.Validate()
+	if err != nil {
+		return cfg, fmt.Errorf("invalid config provided: %w", err)
+	}
+
 	return cfg, nil
 }
 

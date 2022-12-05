@@ -33,7 +33,11 @@ func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) (bool, error) {
 			return globalAttemptedInstall, fmt.Errorf("constructing bucket manager for grabber %s: %w", grabberName, err)
 		}
 
-		installers = append(installers, installer.NewInstaller(grabberName, bm, grabber.Commands, grabber.File, grabber.Path, grabber.Shell, grabber.Timeout, logger))
+		if grabber.File != nil {
+			installers = append(installers, installer.NewArchiveInstaller(grabberName, bm, grabber.Commands, *grabber.File, grabber.Path, grabber.Shell, grabber.Timeout, logger))
+		} else if grabber.Dir != nil {
+			installers = append(installers, installer.NewDirectoryInstaller(grabberName, bm, grabber.Commands, *grabber.Dir, grabber.Path, grabber.Shell, grabber.Timeout, logger))
+		}
 	}
 
 	g := &run.Group{}
@@ -41,7 +45,7 @@ func RunS3Grabber(logger log.Logger, config cfg.GlobalConfig) (bool, error) {
 	defer cancel()
 
 	for _, i := range installers {
-		i := *i
+		i := i
 		g.Add(func() error {
 			ctx, cancel := context.WithTimeout(gctx, i.GetTimeout())
 			defer cancel()

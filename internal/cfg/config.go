@@ -36,10 +36,11 @@ func (c *credentialString) UnmarshalYAML(unmarshal func(interface{}) error) erro
 }
 
 type BucketConfig struct {
-	Host      string
-	AccessKey credentialString `yaml:"access_key"`
-	SecretKey credentialString `yaml:"secret_key"`
-	Bucket    string
+	Host             string
+	AccessKey        credentialString `yaml:"access_key"`
+	SecretKey        credentialString `yaml:"secret_key"`
+	Bucket           string
+	CustomHostHeader string `yaml:"custom_host_header"`
 }
 
 type GrabberConfig struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/vinted/S3Grabber/internal/cfg"
 )
 
@@ -222,6 +224,21 @@ func (m *BucketManager) FindNewestInPrefix(ctx context.Context, prefix string) (
 	return
 }
 
+type hostHeaderAddRoundtripper struct {
+	rt                   http.RoundTripper
+	customHostHeader     string
+	accessKey, secretKey string
+}
+
+func (rt *hostHeaderAddRoundtripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if rt.customHostHeader == "" {
+		return rt.rt.RoundTrip(req)
+	}
+	req.Host = rt.customHostHeader
+	req = signer.SignV4(*req, rt.accessKey, rt.secretKey, "", "")
+	return rt.rt.RoundTrip(req)
+}
+
 func NewBucketManager(buckets []cfg.BucketConfig) (*BucketManager, error) {
 	clients := make([]*minio.Client, 0, len(buckets))
 	bucketNames := make([]string, 0, len(buckets))
@@ -230,6 +247,12 @@ func NewBucketManager(buckets []cfg.BucketConfig) (*BucketManager, error) {
 			Creds:        credentials.NewStaticV4(string(bkt.AccessKey), string(bkt.SecretKey), ""),
 			Secure:       false,
 			BucketLookup: minio.BucketLookupPath,
+			Transport: &hostHeaderAddRoundtripper{
+				customHostHeader: bkt.CustomHostHeader,
+				rt:               http.DefaultTransport,
+				accessKey:        string(bkt.AccessKey),
+				secretKey:        string(bkt.SecretKey),
+			},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("creating client for %s: %w", bkt.Host, err)

@@ -15,3 +15,25 @@ grabbers:
     path: "/etc/prometheus/rules"
     commands:
       - "kill -HUP $(pidof prometheus)"
+  # Example: Archive extraction with prefix filtering
+  monitoring_config:
+    shell: "/bin/sh"
+    timeout: 5s
+    buckets:
+      - lithuania
+    file: "monitoring.tar.gz"
+    path: "/etc/monitoring"
+    replace_prefix: "monitoring."  # Only removes files starting with "monitoring."
+    commands:
+      - "systemctl reload monitoring"
+  # Example: Directory extraction with prefix filtering
+  vita_config:
+    shell: "/bin/sh"
+    timeout: 5s
+    buckets:
+      - lithuania
+    dir: "vita/"
+    path: "/etc/vita"
+    replace_prefix: "vita."  # Only removes files starting with "vita."
+    commands:
+      - "systemctl reload vita"

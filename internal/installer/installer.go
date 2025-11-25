@@ -22,6 +22,13 @@ import (
 )
 
 func removeContents(dir string) error {
+	return removeContentsWithPrefix(dir, "")
+}
+
+// removeContentsWithPrefix removes all files in dir that match the given prefix.
+// If prefix is empty, all files are removed (equivalent to removeContents).
+// If prefix is specified, only files starting with that prefix are removed.
+func removeContentsWithPrefix(dir string, prefix string) error {
 	d, err := os.Open(dir)
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", dir, err)
@@ -32,6 +39,10 @@ func removeContents(dir string) error {
 		return err
 	}
 	for _, name := range names {
+		// If prefix is specified, only remove files matching the prefix
+		if prefix != "" && !filepath.HasPrefix(name, prefix) {
+			continue
+		}
 		fn := filepath.Join(dir, name)
 		err = os.RemoveAll(fn)
 		if err != nil {
@@ -43,8 +54,9 @@ func removeContents(dir string) error {
 
 // Adopted from
 // https://stackoverflow.com/questions/57639648/how-to-decompress-tar-gz-file-in-go.
-// Clears out dir before extracting.
-func ExtractTarGz(l log.Logger, uniqueName string, dir string, gzipStream io.Reader) error {
+// Clears out dir before extracting. If replacePrefix is specified, only files
+// matching that prefix are removed from dir, allowing partial updates.
+func ExtractTarGz(l log.Logger, uniqueName string, dir string, replacePrefix string, gzipStream io.Reader) error {
 	tmpDir, err := os.MkdirTemp("", uniqueName)
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
@@ -96,7 +108,9 @@ func ExtractTarGz(l log.Logger, uniqueName string, dir string, gzipStream io.Rea
 	}
 
 	// Copy over from tmpDir.
-	if err := removeContents(dir); err != nil {
+	// If replacePrefix is specified, only remove files matching that prefix.
+	// Otherwise, remove all files (default behavior).
+	if err := removeContentsWithPrefix(dir, replacePrefix); err != nil {
 		return fmt.Errorf("clearing %s: %w", dir, err)
 	}
 
@@ -129,24 +143,26 @@ type extracter interface {
 	extractFiles(ctx context.Context, bucketIndex int) (bool, error)
 }
 
-func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
+func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, replacePrefix string, logger log.Logger) *Installer {
 	extracter := &archiveExtracter{
-		bucketPath:  bucketPath,
-		bm:          bm,
-		logger:      logger,
-		name:        name,
-		installInto: installInto,
+		bucketPath:    bucketPath,
+		bm:            bm,
+		logger:        logger,
+		name:          name,
+		installInto:   installInto,
+		replacePrefix: replacePrefix,
 	}
 	return newInstaller(name, bm, commands, bucketPath, installInto, shellCmd, timeout, logger, extracter)
 }
 
-func NewDirectoryInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, logger log.Logger) *Installer {
+func NewDirectoryInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, replacePrefix string, logger log.Logger) *Installer {
 	extracter := &directoryExtracter{
-		bucketPrefix: bucketPath,
-		bm:           bm,
-		logger:       logger,
-		name:         name,
-		installInto:  installInto,
+		bucketPrefix:  bucketPath,
+		bm:            bm,
+		logger:        logger,
+		name:          name,
+		installInto:   installInto,
+		replacePrefix: replacePrefix,
 	}
 	return newInstaller(name, bm, commands, bucketPath, installInto, shellCmd, timeout, logger, extracter)
 }
@@ -268,11 +284,12 @@ func (i *Installer) checkLastModTime(ctx context.Context, installInto string) (i
 }
 
 type archiveExtracter struct {
-	bucketPath  string
-	bm          *downloader.BucketManager
-	logger      log.Logger
-	name        string
-	installInto string
+	bucketPath    string
+	bm            *downloader.BucketManager
+	logger        log.Logger
+	name          string
+	installInto   string
+	replacePrefix string
 }
 
 func (e *archiveExtracter) findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error) {
@@ -287,7 +304,7 @@ func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (b
 	defer rc.Close()
 
 	// Extract into given path.
-	if err := ExtractTarGz(e.logger, e.name, e.installInto, rc); err != nil {
+	if err := ExtractTarGz(e.logger, e.name, e.installInto, e.replacePrefix, rc); err != nil {
 		return true, fmt.Errorf("extracting %s: %w", e.bucketPath, err)
 	}
 
@@ -295,11 +312,12 @@ func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (b
 }
 
 type directoryExtracter struct {
-	bucketPrefix string
-	bm           *downloader.BucketManager
-	logger       log.Logger
-	name         string
-	installInto  string
+	bucketPrefix  string
+	bm            *downloader.BucketManager
+	logger        log.Logger
+	name          string
+	installInto   string
+	replacePrefix string
 }
 
 func (e *directoryExtracter) findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error) {
@@ -352,7 +370,9 @@ func (e *directoryExtracter) extractFiles(ctx context.Context, bucketIndex int) 
 	}
 
 	// Copy over from tmpDir.
-	if err := removeContents(e.installInto); err != nil {
+	// If replacePrefix is specified, only remove files matching that prefix.
+	// Otherwise, remove all files (default behavior).
+	if err := removeContentsWithPrefix(e.installInto, e.replacePrefix); err != nil {
 		return true, fmt.Errorf("clearing %s: %w", e.installInto, err)
 	}
 

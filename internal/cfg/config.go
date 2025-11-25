@@ -44,13 +44,14 @@ type BucketConfig struct {
 }
 
 type GrabberConfig struct {
-	Buckets  []string
-	File     *string
-	Dir      *string
-	Path     string
-	Commands []string
-	Timeout  time.Duration
-	Shell    string
+	Buckets       []string
+	File          *string
+	Dir           *string
+	Path          string
+	Commands      []string
+	Timeout       time.Duration
+	Shell         string
+	ReplacePrefix *string `yaml:"replace_prefix"`
 }
 
 type GlobalConfig struct {

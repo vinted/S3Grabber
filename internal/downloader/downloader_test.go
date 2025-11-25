@@ -77,7 +77,7 @@ func TestDownloadFile(t *testing.T) {
 		})
 		assert.Nil(t, os.MkdirAll(tmpDir, os.ModePerm))
 
-		assert.Nil(t, installer.ExtractTarGz(log.NewNopLogger(), "foo", tmpDir, rc))
+		assert.Nil(t, installer.ExtractTarGz(log.NewNopLogger(), "foo", tmpDir, "", rc))
 		f, err := os.Open(filepath.Join(tmpDir, "test"))
 		assert.Nil(t, err)
 		t.Cleanup(func() {

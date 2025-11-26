@@ -6,8 +6,8 @@ The `replace_prefix` feature allows S3 Grabber to perform selective file replace
 
 ## Use Cases
 
-- **Monitoring Configuration**: Update monitoring-related files (`monitoring.*`) without affecting application files (`vita.*`)
-- **Application-Specific Updates**: Update application files (`vita.*`) while keeping monitoring configuration intact
+- **Monitoring Configuration**: Update monitoring-related files (`monitoring.*`) without affecting application files (`svc-x.*`)
+- **Application-Specific Updates**: Update application files (`svc-x.*`) while keeping monitoring configuration intact
 - **Selective Deployments**: Deploy configuration updates for specific services without touching unrelated files
 
 ## Configuration
@@ -49,7 +49,7 @@ grabbers:
 /etc/monitoring/
   ├── monitoring.yml      (old)
   ├── monitoring.conf     (old)
-  ├── vita.yml
+  ├── svc-x.yml
   └── other.txt
 ```
 
@@ -72,7 +72,7 @@ replace_prefix: "monitoring."
 /etc/monitoring/
   ├── monitoring.yml      (new - replaced)
   ├── monitoring.new.yml  (new - added)
-  ├── vita.yml            (preserved)
+  ├── svc-x.yml            (preserved)
   └── other.txt           (preserved)
 ```
 
@@ -80,14 +80,14 @@ replace_prefix: "monitoring."
 
 **Configuration:**
 ```yaml
-dir: "vita/"
-path: "/etc/vita"
-replace_prefix: "vita."
+dir: "svc-x/"
+path: "/etc/svc-x"
+replace_prefix: "svc-x."
 ```
 
 **Behavior:**
-- Downloads all files from `vita/` prefix in S3
-- Removes only files starting with `vita.` from `/etc/vita`
+- Downloads all files from `svc-x/` prefix in S3
+- Removes only files starting with `svc-x.` from `/etc/svc-x`
 - Preserves all other files (e.g., `monitoring.yml`, `config.txt`)
 
 ### Example 3: Full Replacement (Backward Compatible)

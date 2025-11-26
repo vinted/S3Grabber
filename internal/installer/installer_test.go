@@ -70,7 +70,7 @@ func TestExtractTarGz_WithoutPrefix(t *testing.T) {
 	// Setup: Create a directory with existing files
 	existingFiles := map[string]string{
 		"monitoring.yml": "old monitoring config",
-		"vita.yml":       "old vita config",
+		"svc-x.yml":      "old svc-x config",
 		"other.txt":      "other file",
 	}
 	tmpDir := setupTestDir(t, existingFiles)
@@ -91,7 +91,7 @@ func TestExtractTarGz_WithoutPrefix(t *testing.T) {
 	assert.Len(t, resultFiles, 2, "Should have exactly 2 files")
 	assert.Equal(t, "new monitoring config", resultFiles["monitoring.yml"])
 	assert.Equal(t, "new file content", resultFiles["new_file.txt"])
-	assert.NotContains(t, resultFiles, "vita.yml", "vita.yml should be removed")
+	assert.NotContains(t, resultFiles, "svc-x.yml", "svc-x.yml should be removed")
 	assert.NotContains(t, resultFiles, "other.txt", "other.txt should be removed")
 }
 
@@ -100,7 +100,7 @@ func TestExtractTarGz_WithPrefix(t *testing.T) {
 	existingFiles := map[string]string{
 		"monitoring.yml":  "old monitoring config",
 		"monitoring.conf": "old monitoring conf",
-		"vita.yml":        "vita config",
+		"svc-x.yml":       "svc-x config",
 		"other.txt":       "other file",
 	}
 	tmpDir := setupTestDir(t, existingFiles)
@@ -121,7 +121,7 @@ func TestExtractTarGz_WithPrefix(t *testing.T) {
 	assert.Len(t, resultFiles, 4, "Should have 4 files")
 	assert.Equal(t, "new monitoring config", resultFiles["monitoring.yml"])
 	assert.Equal(t, "new monitoring file", resultFiles["monitoring.new.yml"])
-	assert.Equal(t, "vita config", resultFiles["vita.yml"], "vita.yml should be preserved")
+	assert.Equal(t, "svc-x config", resultFiles["svc-x.yml"], "svc-x.yml should be preserved")
 	assert.Equal(t, "other file", resultFiles["other.txt"], "other.txt should be preserved")
 	assert.NotContains(t, resultFiles, "monitoring.conf", "monitoring.conf should be removed")
 }
@@ -129,7 +129,7 @@ func TestExtractTarGz_WithPrefix(t *testing.T) {
 func TestExtractTarGz_WithPrefix_NoMatchingFiles(t *testing.T) {
 	// Setup: Create a directory without files matching the prefix
 	existingFiles := map[string]string{
-		"vita.yml":  "vita config",
+		"svc-x.yml": "svc-x config",
 		"other.txt": "other file",
 	}
 	tmpDir := setupTestDir(t, existingFiles)
@@ -148,7 +148,7 @@ func TestExtractTarGz_WithPrefix_NoMatchingFiles(t *testing.T) {
 	resultFiles := getFilesInDir(t, tmpDir)
 	assert.Len(t, resultFiles, 3, "Should have 3 files")
 	assert.Equal(t, "new monitoring config", resultFiles["monitoring.yml"])
-	assert.Equal(t, "vita config", resultFiles["vita.yml"])
+	assert.Equal(t, "svc-x config", resultFiles["svc-x.yml"])
 	assert.Equal(t, "other file", resultFiles["other.txt"])
 }
 
@@ -175,35 +175,35 @@ func TestExtractTarGz_EmptyDirectory(t *testing.T) {
 }
 
 func TestExtractTarGz_WithPrefix_MultiplePatterns(t *testing.T) {
-	t.Run("vita prefix", func(t *testing.T) {
+	t.Run("svc-x prefix", func(t *testing.T) {
 		// Setup with mixed files
 		existingFiles := map[string]string{
 			"monitoring.yml": "monitoring config",
-			"vita.yml":       "old vita config",
-			"vita.conf":      "old vita conf",
+			"svc-x.yml":      "old svc-x config",
+			"svc-x.conf":     "old svc-x conf",
 			"other.txt":      "other file",
 		}
 		tmpDir := setupTestDir(t, existingFiles)
 
-		// Archive with vita files
+		// Archive with svc-x files
 		archiveFiles := map[string]string{
-			"vita.yml":     "new vita config",
-			"vita.new.yml": "new vita file",
+			"svc-x.yml":     "new svc-x config",
+			"svc-x.new.yml": "new svc-x file",
 		}
 		archive := createTestTarGz(t, archiveFiles)
 
-		// Extract with "vita." prefix
-		err := installer.ExtractTarGz(log.NewNopLogger(), "test", tmpDir, "vita.", archive)
+		// Extract with "svc-x." prefix
+		err := installer.ExtractTarGz(log.NewNopLogger(), "test", tmpDir, "svc-x.", archive)
 		require.NoError(t, err)
 
 		// Verify
 		resultFiles := getFilesInDir(t, tmpDir)
 		assert.Len(t, resultFiles, 4)
-		assert.Equal(t, "new vita config", resultFiles["vita.yml"])
-		assert.Equal(t, "new vita file", resultFiles["vita.new.yml"])
+		assert.Equal(t, "new svc-x config", resultFiles["svc-x.yml"])
+		assert.Equal(t, "new svc-x file", resultFiles["svc-x.new.yml"])
 		assert.Equal(t, "monitoring config", resultFiles["monitoring.yml"], "monitoring.yml preserved")
 		assert.Equal(t, "other file", resultFiles["other.txt"], "other.txt preserved")
-		assert.NotContains(t, resultFiles, "vita.conf", "vita.conf should be removed")
+		assert.NotContains(t, resultFiles, "svc-x.conf", "svc-x.conf should be removed")
 	})
 
 	t.Run("app prefix", func(t *testing.T) {

@@ -27,13 +27,13 @@ grabbers:
     commands:
       - "systemctl reload monitoring"
   # Example: Directory extraction with prefix filtering
-  vita_config:
+  svc-x_config:
     shell: "/bin/sh"
     timeout: 5s
     buckets:
       - lithuania
-    dir: "vita/"
-    path: "/etc/vita"
-    replace_prefix: "vita."  # Only removes files starting with "vita."
+    dir: "svc-x/"
+    path: "/etc/svc-x"
+    replace_prefix: "svc-x."  # Only removes files starting with "svc-x."
     commands:
-      - "systemctl reload vita"
+      - "systemctl reload svc-x"

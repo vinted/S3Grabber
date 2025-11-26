@@ -12,6 +12,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vinted/S3Grabber/internal/installer"
 )
 
@@ -128,8 +129,8 @@ func TestExtractTarGz_WithPrefix(t *testing.T) {
 func TestExtractTarGz_WithPrefix_NoMatchingFiles(t *testing.T) {
 	// Setup: Create a directory without files matching the prefix
 	existingFiles := map[string]string{
-		"vita.yml":   "vita config",
-		"other.txt":  "other file",
+		"vita.yml":  "vita config",
+		"other.txt": "other file",
 	}
 	tmpDir := setupTestDir(t, existingFiles)
 
@@ -256,4 +257,3 @@ func TestIsEmptyDir(t *testing.T) {
 		assert.False(t, isEmpty)
 	})
 }
-

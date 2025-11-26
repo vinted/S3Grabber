@@ -12,18 +12,16 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	cp "github.com/otiai10/copy"
+
 	"github.com/vinted/S3Grabber/internal/downloader"
 )
-
-func removeContents(dir string) error {
-	return removeContentsWithPrefix(dir, "")
-}
 
 // removeContentsWithPrefix removes all files in dir that match the given prefix.
 // If prefix is empty, all files are removed (equivalent to removeContents).
@@ -40,7 +38,7 @@ func removeContentsWithPrefix(dir string, prefix string) error {
 	}
 	for _, name := range names {
 		// If prefix is specified, only remove files matching the prefix
-		if prefix != "" && !filepath.HasPrefix(name, prefix) {
+		if prefix != "" && !strings.HasPrefix(name, prefix) {
 			continue
 		}
 		fn := filepath.Join(dir, name)

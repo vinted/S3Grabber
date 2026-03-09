@@ -106,6 +106,14 @@ func TestS3GrabberMain(t *testing.T) {
 	isEmpty, err := installer.IsEmptyDir(tmpDirArchive)
 	require.NoError(t, err)
 	require.Equal(t, false, isEmpty)
+
+	require.NoError(t, bm.DeleteFile(context.Background(), "exampledir/dir_file2.txt", 1))
+	attemptedInstall, err = s3grabber.RunS3Grabber(log.NewLogfmtLogger(os.Stderr), grabberCfg)
+	require.NoError(t, err)
+	require.True(t, attemptedInstall)
+	checkFileContentEqual(t, filepath.Join(tmpDirDir, "dir_file1.txt"), "test1\n")
+	checkFileMissing(t, filepath.Join(tmpDirDir, "dir_file2.txt"))
+
 }
 
 func checkFileContentEqual(t *testing.T, path, content string) {
@@ -117,5 +125,9 @@ func checkFileContentEqual(t *testing.T, path, content string) {
 	fileContent, err := io.ReadAll(f)
 	require.Nil(t, err)
 	require.Equal(t, string(fileContent), string(content))
+}
 
+func checkFileMissing(t *testing.T, path string) {
+	_, err := os.Stat(path)
+	require.True(t, os.IsNotExist(err), "File should not exist: %s", path)
 }

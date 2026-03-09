@@ -139,6 +139,7 @@ type Installer struct {
 type extracter interface {
 	findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error)
 	extractFiles(ctx context.Context, bucketIndex int) (bool, error)
+	checkMissingFiles(ctx context.Context, installInto string) (bool, error)
 }
 
 func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, replacePrefix string, logger log.Logger) *Installer {
@@ -218,6 +219,16 @@ func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr er
 	}
 
 	if !doInstall {
+		hasMissingFiles, err := i.extracter.checkMissingFiles(ctx, i.installInto)
+		if err != nil {
+			_ = level.Debug(i.logger).Log("msg", "failed to check for missing files", "err", err.Error(), "dir", i.installInto)
+		} else if hasMissingFiles {
+			_ = level.Debug(i.logger).Log("msg", "executing installation because files are missing", "dir", i.installInto, "path", i.bucketPath)
+			doInstall = true
+		}
+	}
+
+	if !doInstall {
 		return false, nil
 	}
 
@@ -294,6 +305,11 @@ func (e *archiveExtracter) findNewestFile(ctx context.Context) (lastUpdated time
 	return e.bm.FindNewestFile(ctx, e.bucketPath)
 }
 
+func (e *archiveExtracter) checkMissingFiles(ctx context.Context, installInto string) (bool, error) {
+	// note: in archive case it is sufficient to rely on the modification time check
+	return false, nil
+}
+
 func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {
 	rc, err := e.bm.GetFile(ctx, e.bucketPath, bucketIndex)
 	if err != nil {
@@ -320,6 +336,28 @@ type directoryExtracter struct {
 
 func (e *directoryExtracter) findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error) {
 	return e.bm.FindNewestInPrefix(ctx, e.bucketPrefix)
+}
+
+func (e *directoryExtracter) checkMissingFiles(ctx context.Context, installInto string) (bool, error) {
+	remoteFiles, err := e.bm.ListFiles(ctx, e.bucketPrefix)
+	if err != nil {
+		return false, fmt.Errorf("listing files in bucket: %w", err)
+	}
+
+	for _, targetPath := range remoteFiles {
+		// Apply replacePrefix logic if needed
+		if e.replacePrefix != "" && strings.HasPrefix(targetPath, e.replacePrefix) {
+			targetPath = strings.TrimPrefix(targetPath, e.replacePrefix)
+		}
+
+		fullPath := filepath.Join(installInto, targetPath)
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			_ = level.Debug(e.logger).Log("msg", "found missing file", "file", fullPath)
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (e *directoryExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {

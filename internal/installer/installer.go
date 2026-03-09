@@ -343,16 +343,27 @@ func (e *directoryExtracter) checkMissingFiles(ctx context.Context, installInto 
 	if err != nil {
 		return false, fmt.Errorf("listing files in bucket: %w", err)
 	}
-
+	// for simplicity, compare file names only.
+	remoteMap := make(map[string]struct{}, len(remoteFiles))
 	for _, targetPath := range remoteFiles {
-		// Apply replacePrefix logic if needed
-		if e.replacePrefix != "" && strings.HasPrefix(targetPath, e.replacePrefix) {
-			targetPath = strings.TrimPrefix(targetPath, e.replacePrefix)
+		remoteMap[path.Base(targetPath)] = struct{}{}
+	}
+
+	localEntries, err := os.ReadDir(e.installInto)
+	if err != nil {
+		return false, fmt.Errorf("reading dir %s: %w", e.installInto, err)
+	}
+	for _, entry := range localEntries {
+		if entry.IsDir() {
+			continue
+		}
+		fn := entry.Name()
+		if e.replacePrefix != "" && !strings.HasPrefix(fn, e.replacePrefix) {
+			continue
 		}
 
-		fullPath := filepath.Join(installInto, targetPath)
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			_ = level.Debug(e.logger).Log("msg", "found missing file", "file", fullPath)
+		if _, ok := remoteMap[fn]; !ok {
+			_ = level.Debug(e.logger).Log("msg", "file is missing on remote", "file", fn)
 			return true, nil
 		}
 	}

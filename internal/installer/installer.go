@@ -349,9 +349,9 @@ func (e *directoryExtracter) checkMissingFiles(ctx context.Context, installInto 
 		remoteMap[path.Base(targetPath)] = struct{}{}
 	}
 
-	localEntries, err := os.ReadDir(e.installInto)
+	localEntries, err := os.ReadDir(installInto)
 	if err != nil {
-		return false, fmt.Errorf("reading dir %s: %w", e.installInto, err)
+		return false, fmt.Errorf("reading dir %s: %w", installInto, err)
 	}
 	for _, entry := range localEntries {
 		if entry.IsDir() {

@@ -139,7 +139,7 @@ type Installer struct {
 type extracter interface {
 	findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error)
 	extractFiles(ctx context.Context, bucketIndex int) (bool, error)
-	checkMissingFiles(ctx context.Context, installInto string) (bool, error)
+	checkMissingFiles(ctx context.Context) (bool, error)
 }
 
 func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, replacePrefix string, logger log.Logger) *Installer {
@@ -219,9 +219,9 @@ func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr er
 	}
 
 	if !doInstall {
-		hasMissingFiles, err := i.extracter.checkMissingFiles(ctx, i.installInto)
+		hasMissingFiles, err := i.extracter.checkMissingFiles(ctx)
 		if err != nil {
-			_ = level.Debug(i.logger).Log("msg", "failed to check for missing files", "err", err.Error(), "dir", i.installInto)
+			_ = level.Error(i.logger).Log("msg", "failed to check for missing files", "err", err.Error(), "dir", i.installInto)
 		} else if hasMissingFiles {
 			_ = level.Debug(i.logger).Log("msg", "executing installation because files are missing", "dir", i.installInto, "path", i.bucketPath)
 			doInstall = true
@@ -305,7 +305,7 @@ func (e *archiveExtracter) findNewestFile(ctx context.Context) (lastUpdated time
 	return e.bm.FindNewestFile(ctx, e.bucketPath)
 }
 
-func (e *archiveExtracter) checkMissingFiles(ctx context.Context, installInto string) (bool, error) {
+func (e *archiveExtracter) checkMissingFiles(ctx context.Context) (bool, error) {
 	// note: in archive case it is sufficient to rely on the modification time check
 	return false, nil
 }
@@ -338,7 +338,7 @@ func (e *directoryExtracter) findNewestFile(ctx context.Context) (lastUpdated ti
 	return e.bm.FindNewestInPrefix(ctx, e.bucketPrefix)
 }
 
-func (e *directoryExtracter) checkMissingFiles(ctx context.Context, installInto string) (bool, error) {
+func (e *directoryExtracter) checkMissingFiles(ctx context.Context) (bool, error) {
 	remoteFiles, err := e.bm.ListFiles(ctx, e.bucketPrefix)
 	if err != nil {
 		return false, fmt.Errorf("listing files in bucket: %w", err)
@@ -349,9 +349,9 @@ func (e *directoryExtracter) checkMissingFiles(ctx context.Context, installInto 
 		remoteMap[path.Base(targetPath)] = struct{}{}
 	}
 
-	localEntries, err := os.ReadDir(installInto)
+	localEntries, err := os.ReadDir(e.installInto)
 	if err != nil {
-		return false, fmt.Errorf("reading dir %s: %w", installInto, err)
+		return false, fmt.Errorf("reading dir %s: %w", e.installInto, err)
 	}
 	for _, entry := range localEntries {
 		if entry.IsDir() {

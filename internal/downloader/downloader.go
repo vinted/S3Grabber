@@ -188,54 +188,15 @@ func (m *BucketManager) FindNewestFile(ctx context.Context, path string) (modTim
 // FindNewestInPrefix finds the newest file in all of the buckets for the provided prefix.
 // Returns the modification time and bucket index that later on needs to be passed to GetFiles.
 func (m *BucketManager) FindNewestInPrefix(ctx context.Context, prefix string) (modTime time.Time, bucketIndex int, err error) {
-	objects, errs := m.listObjects(ctx, prefix)
-	var checkedOne bool
-	for _, objInfo := range objects {
-		if objInfo.lastModified.After(modTime) {
-			modTime = objInfo.lastModified
-			bucketIndex = objInfo.bucketIndex
-			checkedOne = true
-		}
-	}
-
-	if !checkedOne {
-		if errs != nil {
-			return modTime, bucketIndex, errs
-		}
-		return modTime, bucketIndex, fmt.Errorf("no file has been modified so either they do not exist or there are time synchronization problems")
-	}
-	return
-}
-
-func (m *BucketManager) ListFiles(ctx context.Context, prefix string) ([]string, error) {
-	objects, err := m.listObjects(ctx, prefix)
-	if err != nil {
-		return nil, err
-	}
-
-	var files []string
-	for _, objInfo := range objects {
-		files = append(files, objInfo.key)
-	}
-	return files, nil
-}
-
-type objectInfo struct {
-	key          string
-	lastModified time.Time
-	bucketIndex  int
-}
-
-func (m *BucketManager) listObjects(ctx context.Context, prefix string) ([]objectInfo, error) {
 	if len(m.clients) == 0 {
-		return nil, fmt.Errorf("no clients configured")
+		return modTime, bucketIndex, fmt.Errorf("no clients configured")
 	}
 
 	const notFoundCode = "NoSuchKey"
 
 	var (
-		errs    error
-		objects []objectInfo
+		errs       error
+		checkedOne bool
 	)
 
 	if !strings.HasSuffix(prefix, "/") {
@@ -254,14 +215,51 @@ func (m *BucketManager) listObjects(ctx context.Context, prefix string) ([]objec
 				continue
 			}
 
-			objects = append(objects, objectInfo{
-				key:          objInfo.Key,
-				lastModified: objInfo.LastModified,
-				bucketIndex:  i,
-			})
+			if objInfo.LastModified.After(modTime) {
+				modTime = objInfo.LastModified
+				bucketIndex = i
+				checkedOne = true
+			}
 		}
 	}
-	return objects, errs
+
+	if !checkedOne {
+		if errs != nil {
+			return modTime, bucketIndex, errs
+		}
+		return modTime, bucketIndex, fmt.Errorf("no file has been modified so either they do not exist or there are time synchronization problems")
+	}
+	return
+}
+
+func (m *BucketManager) ListFiles(ctx context.Context, prefix string) ([]string, error) {
+	if len(m.clients) == 0 {
+		return nil, fmt.Errorf("no clients configured")
+	}
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix = prefix + "/"
+	}
+
+	const notFoundCode = "NoSuchKey"
+	var errs error
+	var files []string
+	for i, cl := range m.clients {
+		objCh := cl.ListObjects(ctx, m.bucketNames[i], minio.ListObjectsOptions{Prefix: prefix})
+		for objInfo := range objCh {
+			err := objInfo.Err
+			if err != nil && minio.ToErrorResponse(err).Code != notFoundCode {
+				errs = multierror.Append(errs, err)
+				continue
+			}
+			if minio.ToErrorResponse(err).Code == notFoundCode {
+				continue
+			}
+
+			files = append(files, objInfo.Key)
+		}
+	}
+	return files, errs
 }
 
 type hostHeaderAddRoundtripper struct {

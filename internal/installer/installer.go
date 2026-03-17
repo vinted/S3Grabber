@@ -224,6 +224,7 @@ func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr er
 		missingLocalFiles, err := i.extracter.checkMissingFiles(ctx)
 		if err != nil {
 			_ = level.Error(i.logger).Log("msg", "failed to check for missing files", "err", err.Error(), "dir", i.installInto)
+			return false, fmt.Errorf("checking for missing files: %w", err)
 		} else if len(missingLocalFiles) > 0 {
 			var errs error
 			for _, localFile := range missingLocalFiles {

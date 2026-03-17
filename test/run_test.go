@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/stretchr/testify/require"
 	"github.com/vinted/S3Grabber/internal/cfg"
 	"github.com/vinted/S3Grabber/internal/downloader"
@@ -34,6 +35,7 @@ func TestS3GrabberMain(t *testing.T) {
 		require.Nil(t, os.RemoveAll(tmpDirDir))
 	})
 
+	dirPrefix := "dir_"
 	grabberCfg := cfg.GlobalConfig{
 		Buckets: map[string]cfg.BucketConfig{
 			"test1": {
@@ -59,12 +61,13 @@ func TestS3GrabberMain(t *testing.T) {
 				Shell:    "/bin/sh",
 			},
 			"testing_dir": {
-				Buckets:  []string{"test2"},
-				Dir:      &dirName,
-				Path:     tmpDirDir,
-				Commands: []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDirDir, "some_dir_file"))},
-				Timeout:  5 * time.Second,
-				Shell:    "/bin/sh",
+				Buckets:       []string{"test2"},
+				Dir:           &dirName,
+				Path:          tmpDirDir,
+				Commands:      []string{fmt.Sprintf("echo foobar > %s", filepath.Join(tmpDirDir, "some_dir_file"))},
+				Timeout:       5 * time.Second,
+				Shell:         "/bin/sh",
+				ReplacePrefix: &dirPrefix,
 			},
 		},
 	}
@@ -106,6 +109,18 @@ func TestS3GrabberMain(t *testing.T) {
 	isEmpty, err := installer.IsEmptyDir(tmpDirArchive)
 	require.NoError(t, err)
 	require.Equal(t, false, isEmpty)
+
+	require.NoError(t, bm.DeleteFile(context.Background(), "exampledir/dir_file2.txt", 1))
+	attemptedInstall, err = s3grabber.RunS3Grabber(debugLogger(), grabberCfg)
+	require.NoError(t, err)
+	require.True(t, attemptedInstall)
+	checkFileExist(t, filepath.Join(tmpDirDir, "dir_file1.txt"))
+	checkFileMissing(t, filepath.Join(tmpDirDir, "dir_file2.txt"))
+}
+
+func debugLogger() log.Logger {
+	logger := log.NewLogfmtLogger(os.Stderr)
+	return level.NewFilter(logger, level.AllowDebug())
 }
 
 func checkFileContentEqual(t *testing.T, path, content string) {
@@ -117,5 +132,14 @@ func checkFileContentEqual(t *testing.T, path, content string) {
 	fileContent, err := io.ReadAll(f)
 	require.Nil(t, err)
 	require.Equal(t, string(fileContent), string(content))
+}
 
+func checkFileExist(t *testing.T, path string) {
+	_, err := os.Stat(path)
+	require.NoError(t, err, "File should exist: %s", path)
+}
+
+func checkFileMissing(t *testing.T, path string) {
+	_, err := os.Stat(path)
+	require.True(t, os.IsNotExist(err), "File should not exist: %s", path)
 }

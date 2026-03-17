@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/vinted/S3Grabber/releases/tag/0.10.0)
+
+* Added automatic deletion of files from local storage for directory/prefix-based
+  grabbers when the corresponding objects are deleted from the S3 bucket.
+  S3Grabber now synchronizes not only new and updated files but also removes
+  local files for these grabbers that no longer exist in the remote S3 storage.
+* **Heads Up**: This version changes the synchronization behavior for
+  directory/prefix-based grabbers. Files deleted from the S3 bucket for those
+  grabbers will now be automatically removed from the local storage. If you
+  have files in your local directory that you want to preserve independently
+  from S3, please review your setup before upgrading (archive grabbers are not
+  affected by this change).
+
 ## [0.3.0](https://github.com/vinted/S3Grabber/releases/tag/0.3.0)
 
 * Added waiting mode. Now if `--interval` is passed and it is not zero then

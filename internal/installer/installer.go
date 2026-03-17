@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/hashicorp/go-multierror"
 	cp "github.com/otiai10/copy"
 
 	"github.com/vinted/S3Grabber/internal/downloader"
@@ -139,6 +140,7 @@ type Installer struct {
 type extracter interface {
 	findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error)
 	extractFiles(ctx context.Context, bucketIndex int) (bool, error)
+	checkMissingFiles(ctx context.Context) ([]string, error)
 }
 
 func NewArchiveInstaller(name string, bm *downloader.BucketManager, commands []string, bucketPath, installInto string, shellCmd string, timeout time.Duration, replacePrefix string, logger log.Logger) *Installer {
@@ -215,6 +217,25 @@ func (i *Installer) Install(ctx context.Context) (attemptedInstall bool, rerr er
 	} else if err == nil {
 		_ = level.Debug(i.logger).Log("msg", "executing installation because we have found an update", "dir", i.installInto, "path", i.bucketPath)
 		doInstall = true
+	}
+
+	// If we are not going to install, check if there are files that are present locally but missing remotely in any of the buckets and remove them
+	if !doInstall {
+		missingLocalFiles, err := i.extracter.checkMissingFiles(ctx)
+		if err != nil {
+			_ = level.Error(i.logger).Log("msg", "failed to check for missing files", "err", err.Error(), "dir", i.installInto)
+			return false, fmt.Errorf("checking for missing files: %w", err)
+		} else if len(missingLocalFiles) > 0 {
+			var errs error
+			for _, localFile := range missingLocalFiles {
+				_ = level.Debug(i.logger).Log("msg", "removing local files that are missing on remote", "file", localFile)
+				if err := os.Remove(localFile); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("removing missing local file %s: %w", localFile, err))
+					continue
+				}
+			}
+			return true, errs
+		}
 	}
 
 	if !doInstall {
@@ -294,6 +315,11 @@ func (e *archiveExtracter) findNewestFile(ctx context.Context) (lastUpdated time
 	return e.bm.FindNewestFile(ctx, e.bucketPath)
 }
 
+func (e *archiveExtracter) checkMissingFiles(ctx context.Context) ([]string, error) {
+	// note: in archive case it is sufficient to rely on the modification time check
+	return nil, nil
+}
+
 func (e *archiveExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {
 	rc, err := e.bm.GetFile(ctx, e.bucketPath, bucketIndex)
 	if err != nil {
@@ -320,6 +346,43 @@ type directoryExtracter struct {
 
 func (e *directoryExtracter) findNewestFile(ctx context.Context) (lastUpdated time.Time, bucketIndex int, err error) {
 	return e.bm.FindNewestInPrefix(ctx, e.bucketPrefix)
+}
+
+// checkMissingFiles compares the files in the local directory with the files in all remote buckets combined.
+// Returns list of files (full path) that are present locally but missing from all remote buckets.
+// If replacePrefix is specified, only files matching that prefix are checked.
+func (e *directoryExtracter) checkMissingFiles(ctx context.Context) ([]string, error) {
+	remoteFiles, err := e.bm.ListFiles(ctx, e.bucketPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("listing files in bucket: %w", err)
+	}
+	// for simplicity, compare file names only.
+	remoteMap := make(map[string]struct{}, len(remoteFiles))
+	for _, targetPath := range remoteFiles {
+		remoteMap[path.Base(targetPath)] = struct{}{}
+	}
+
+	localEntries, err := os.ReadDir(e.installInto)
+	if err != nil {
+		return nil, fmt.Errorf("reading dir %s: %w", e.installInto, err)
+	}
+	missingLocalFiles := []string{}
+	for _, entry := range localEntries {
+		if entry.IsDir() {
+			continue
+		}
+		fn := entry.Name()
+		if e.replacePrefix != "" && !strings.HasPrefix(fn, e.replacePrefix) {
+			continue
+		}
+
+		if _, ok := remoteMap[fn]; !ok {
+			_ = level.Debug(e.logger).Log("msg", "file is missing on remote", "file", fn)
+			missingLocalFiles = append(missingLocalFiles, path.Join(e.installInto, fn))
+		}
+	}
+
+	return missingLocalFiles, nil
 }
 
 func (e *directoryExtracter) extractFiles(ctx context.Context, bucketIndex int) (bool, error) {

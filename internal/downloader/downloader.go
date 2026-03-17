@@ -137,6 +137,14 @@ func (m *BucketManager) PutFile(ctx context.Context, filePath, bucketPath string
 	return nil
 }
 
+// DeleteFile deletes the given file from the given path. Use only for tests.
+func (m *BucketManager) DeleteFile(ctx context.Context, bucketPath string, bucketIndex int) error {
+	if err := m.indexInBounds(bucketIndex); err != nil {
+		return err
+	}
+	return m.clients[bucketIndex].RemoveObject(ctx, m.bucketNames[bucketIndex], bucketPath, minio.RemoveObjectOptions{})
+}
+
 // FindNewestFile finds the newest file in all of the buckets with the provided path.
 // Returns the modification time and bucket index that later on needs to be passed to GetFile.
 func (m *BucketManager) FindNewestFile(ctx context.Context, path string) (modTime time.Time, bucketIndex int, err error) {
@@ -222,6 +230,41 @@ func (m *BucketManager) FindNewestInPrefix(ctx context.Context, prefix string) (
 		return modTime, bucketIndex, fmt.Errorf("no file has been modified so either they do not exist or there are time synchronization problems")
 	}
 	return
+}
+
+// ListFiles lists all the files in the provided prefix across all buckets.
+func (m *BucketManager) ListFiles(ctx context.Context, prefix string) ([]string, error) {
+	if len(m.clients) == 0 {
+		return nil, fmt.Errorf("no clients configured")
+	}
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix = prefix + "/"
+	}
+
+	const notFoundCode = "NoSuchKey"
+	var errs error
+	var files []string
+	for i, cl := range m.clients {
+		objCh := cl.ListObjects(ctx, m.bucketNames[i], minio.ListObjectsOptions{Prefix: prefix})
+		for objInfo := range objCh {
+			err := objInfo.Err
+			if err != nil && minio.ToErrorResponse(err).Code != notFoundCode {
+				errs = multierror.Append(errs, err)
+				continue
+			}
+			if minio.ToErrorResponse(err).Code == notFoundCode {
+				continue
+			}
+
+			files = append(files, objInfo.Key)
+		}
+	}
+	return files, errs
+}
+
+func (m *BucketManager) Buckets() []string {
+	return m.bucketNames
 }
 
 type hostHeaderAddRoundtripper struct {

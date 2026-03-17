@@ -348,8 +348,8 @@ func (e *directoryExtracter) findNewestFile(ctx context.Context) (lastUpdated ti
 	return e.bm.FindNewestInPrefix(ctx, e.bucketPrefix)
 }
 
-// checkMissingFiles compares the files in the local directory with the files in the all remote buckets.
-// Returns list of files (full path) that are present locally but missing remotely in any of the buckets.
+// checkMissingFiles compares the files in the local directory with the files in all remote buckets combined.
+// Returns list of files (full path) that are present locally but missing from all remote buckets.
 // If replacePrefix is specified, only files matching that prefix are checked.
 func (e *directoryExtracter) checkMissingFiles(ctx context.Context) ([]string, error) {
 	remoteFiles, err := e.bm.ListFiles(ctx, e.bucketPrefix)

@@ -18,6 +18,9 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+// Version of the application. Should be updated on each release.
+var Version = "0.10.0"
+
 // initializeLogger initializes a logger with the given parameters.
 func initializeLogger(logFormat string, logLevel string) log.Logger {
 	var logger log.Logger
@@ -71,8 +74,14 @@ func main() {
 	httpAddress := kingpin.Flag("http-address", "Listening address for the HTTP server").Default(":10010").String()
 	logFormat := kingpin.Flag("log-format", "Log format").Default("LOGFMT").Enum("JSON", "LOGFMT")
 	logLevel := kingpin.Flag("log-level", "Log level").Default("DEBUG").Enum("DEBUG", "INFO", "WARN", "ERROR")
+	showVersion := kingpin.Flag("version", "Show version and exit").Bool()
 
 	kingpin.Parse()
+
+	if *showVersion {
+		fmt.Println("s3grabber version", Version)
+		os.Exit(0)
+	}
 
 	logger := initializeLogger(*logFormat, *logLevel)
 	cfg, err := cfg.ReadConfig(*configFile)

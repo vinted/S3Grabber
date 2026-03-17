@@ -232,6 +232,7 @@ func (m *BucketManager) FindNewestInPrefix(ctx context.Context, prefix string) (
 	return
 }
 
+// ListFiles lists all the files in the provided prefix across all buckets.
 func (m *BucketManager) ListFiles(ctx context.Context, prefix string) ([]string, error) {
 	if len(m.clients) == 0 {
 		return nil, fmt.Errorf("no clients configured")
@@ -260,6 +261,10 @@ func (m *BucketManager) ListFiles(ctx context.Context, prefix string) ([]string,
 		}
 	}
 	return files, errs
+}
+
+func (m *BucketManager) Buckets() []string {
+	return m.bucketNames
 }
 
 type hostHeaderAddRoundtripper struct {

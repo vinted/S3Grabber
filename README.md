@@ -17,3 +17,51 @@ Example configuration is provided in `config.yml`.
 Unit tests can be run with `go test -v ./...`.
 
 E2E tests together with unit tests can be run using `docker-compose build tester && docker-compose down -v --remove-orphans && docker-compose up -d && docker-compose run --rm tester go test ./...`.
+
+Absolutely — here’s a **shorter, cleaner, copy‑friendly** README section without output examples or extra explanation. It keeps the workflow clear but minimal.
+
+---
+
+## 📦 Release Workflow
+
+This project uses a simple manual process for creating versioned releases.  
+A helper script builds binaries for all supported platforms and generates checksums.
+
+### 1. Set the release version
+
+```sh
+export TAG=0.10.0
+```
+
+### 2. Create and push the Git tag
+
+```sh
+git tag "$TAG"
+git push origin "$TAG"
+```
+
+### 3. Build binaries and checksums
+
+The build script is located at:
+
+```
+./scripts/release/build_release.sh
+```
+
+Run it with the version tag:
+
+```sh
+./scripts/release/build_release.sh "$TAG"
+```
+
+### 4. Create the GitHub Release
+
+```sh
+gh release create "$TAG" --generate-notes
+```
+
+### 5. Upload release assets
+
+```sh
+gh release upload "$TAG" release_"$TAG"/*
+```

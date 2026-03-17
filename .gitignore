@@ -1,1 +1,6 @@
 .idea/
+
+release_*/
+s3grabber
+*.tar.gz
+*_checksums.txt

@@ -12,7 +12,7 @@ else
 fi
 
 APP_NAME="s3grabber"
-MAIN_FILE="cmd/s3grabber/s3grabber.go"
+MAIN_PKG="./cmd/s3grabber"
 
 # Build matrix
 PLATFORMS=(
@@ -36,7 +36,7 @@ for entry in "${PLATFORMS[@]}"; do
 
     echo "→ Building $GOOS/$GOARCH"
 
-    GOOS=$GOOS GOARCH=$GOARCH go build -o "$OUTDIR/$BIN_NAME" "$MAIN_FILE"
+    GOOS=$GOOS GOARCH=$GOARCH go build -o "$OUTDIR/$BIN_NAME" "$MAIN_PKG"
 
     echo "→ Packaging $TAR_NAME"
     tar -C "$OUTDIR" -czf "$OUTDIR/$TAR_NAME" "$BIN_NAME"

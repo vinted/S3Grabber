@@ -65,7 +65,7 @@ func (m *BucketManager) GetFiles(ctx context.Context, prefix string, bucketIndex
 				continue
 			}
 			if objInfo.Err != nil {
-				err = fmt.Errorf("listing objects: %w", err)
+				err = fmt.Errorf("listing objects: %w", objInfo.Err)
 				bucketObjects <- BucketFile{
 					Err: err,
 				}
@@ -76,17 +76,18 @@ func (m *BucketManager) GetFiles(ctx context.Context, prefix string, bucketIndex
 				continue // not a file: prefix (directory)
 			}
 
-			obj, err := bucketClient.GetObject(ctx, bucketName, objInfo.Key, minio.GetObjectOptions{})
-			if err != nil {
-				err = fmt.Errorf("getting object %s: %w", objInfo.Key, err)
+			if !strings.HasPrefix(objInfo.Key, prefix) {
+				// should not happen, but just to ensure safe prefix removal
+				err = fmt.Errorf("key does not have expected prefix %s: %s", prefix, objInfo.Key)
 				bucketObjects <- BucketFile{
 					Err: err,
 				}
 				continue
 			}
-			if !strings.HasPrefix(objInfo.Key, prefix) {
-				// should not happen, but just to ensure safe prefix removal
-				err = fmt.Errorf("key does not have expected prefix %s: %s", prefix, objInfo.Key)
+
+			obj, getErr := bucketClient.GetObject(ctx, bucketName, objInfo.Key, minio.GetObjectOptions{})
+			if getErr != nil {
+				err = fmt.Errorf("getting object %s: %w", objInfo.Key, getErr)
 				bucketObjects <- BucketFile{
 					Err: err,
 				}

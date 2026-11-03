@@ -102,3 +102,29 @@ func TestDownloadFile(t *testing.T) {
 		assert.NotEqual(t, modTime1, modTime2)
 	})
 }
+
+func TestGetFilesReportsListingError(t *testing.T) {
+	ts := httptest.NewServer(gofakes3.New(s3mem.New()).Server())
+	t.Cleanup(ts.Close)
+
+	bm, err := downloader.NewBucketManager([]cfg.BucketConfig{
+		{
+			Host:      strings.TrimPrefix(ts.URL, "http://"),
+			AccessKey: "something",
+			SecretKey: "something",
+			Bucket:    "missingbucket",
+		},
+	})
+	assert.Nil(t, err)
+
+	files, err := bm.GetFiles(context.Background(), "test", 0)
+	assert.Nil(t, err)
+
+	var errs []error
+	for f := range files {
+		errs = append(errs, f.Err)
+	}
+	assert.Len(t, errs, 1)
+	assert.NotNil(t, errs[0])
+	assert.Contains(t, errs[0].Error(), "bucket does not exist")
+}
